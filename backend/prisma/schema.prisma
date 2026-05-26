@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Modelos ─────────────────────────────────────────────
+// Nota: SQLite no soporta enums. Los roles y estados se manejan como String
+// con valores: Role → "DRIVER" | "PARENT"
+//              TripStatus → "ACTIVE" | "PAUSED" | "FINISHED"
+//              PaymentStatus → "PENDING" | "PAID"
+//              MessageType → "PREDEFINED" | "SYSTEM"
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      String
+  name      String
+  phone     String?
+  photoUrl  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  driver        Driver?
+  parent        Parent?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Driver {
+  id            String  @id @default(uuid())
+  userId        String  @unique
+  licenseNumber String  @unique
+  plateNumber   String  @unique
+  vehicleModel  String
+  vehicleColor  String
+  isVerified    Boolean @default(false)
+
+  user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students                Student[]
+  routes                  Route[]
+  trips                   Trip[]               @relation("DriverTrips")
+  substituteTrips         Trip[]               @relation("SubstituteDriverTrips")
+  payments                Payment[]
+  messages                Message[]
+  titularSubstitutions    DriverSubstitution[] @relation("TitularDriver")
+  substituteSubstitutions DriverSubstitution[] @relation("SubstituteDriver")
+
+  @@map("drivers")
+}
+
+model Parent {
+  id             String @id @default(uuid())
+  userId         String @unique
+  invitationCode String @unique
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students Student[]
+  absences Absence[]
+
+  @@map("parents")
+}
+
+model Student {
+  id        String  @id @default(uuid())
+  name      String
+  photoUrl  String?
+  address   String
+  latitude  Float
+  longitude Float
+  isActive  Boolean @default(true)
+
+  driverId String
+  parentId String?
+
+  driver    Driver     @relation(fields: [driverId], references: [id])
+  parent    Parent?    @relation(fields: [parentId], references: [id])
+  stops     Stop[]
+  boardings Boarding[]
+  absences  Absence[]
+  payments  Payment[]
+
+  @@map("students")
+}
+
+model Route {
+  id        String   @id @default(uuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  driverId String
+
+  driver        Driver              @relation(fields: [driverId], references: [id])
+  stops         Stop[]
+  trips         Trip[]
+  trafficAlerts TrafficAlert[]
+  messages      Message[]
+  substitutions DriverSubstitution[]
+
+  @@map("routes")
+}
+
+model Stop {
+  id            String @id @default(uuid())
+  order         Int
+  address       String
+  latitude      Float
+  longitude     Float
+  estimatedTime String
+
+  routeId   String
+  studentId String
+
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@unique([routeId, order])
+  @@map("stops")
+}
+
+model Trip {
+  id         String    @id @default(uuid())
+  status     String    @default("ACTIVE")
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  routeId            String
+  driverId           String
+  substituteDriverId String?
+
+  route            Route      @relation(fields: [routeId], references: [id])
+  driver           Driver     @relation("DriverTrips", fields: [driverId], references: [id])
+  substituteDriver Driver?    @relation("SubstituteDriverTrips", fields: [substituteDriverId], references: [id])
+  boardings        Boarding[]
+
+  @@map("trips")
+}
+
+model Boarding {
+  id        String   @id @default(uuid())
+  boardedAt DateTime @default(now())
+  latitude  Float
+  longitude Float
+
+  tripId    String
+  studentId String
+
+  trip    Trip    @relation(fields: [tripId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@unique([tripId, studentId])
+  @@map("boardings")
+}
+
+model Absence {
+  id     String  @id @default(uuid())
+  date   String
+  reason String?
+
+  studentId    String
+  registeredBy String
+
+  student Student @relation(fields: [studentId], references: [id])
+  parent  Parent  @relation(fields: [registeredBy], references: [id])
+
+  @@unique([studentId, date])
+  @@map("absences")
+}
+
+model Payment {
+  id      String    @id @default(uuid())
+  month   Int
+  year    Int
+  amount  Float
+  status  String    @default("PENDING")
+  paidAt  DateTime?
+  dueDate String
+
+  studentId String
+  driverId  String
+
+  student Student @relation(fields: [studentId], references: [id])
+  driver  Driver  @relation(fields: [driverId], references: [id])
+
+  @@unique([studentId, driverId, month, year])
+  @@map("payments")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  data      String?
+  createdAt DateTime @default(now())
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model TrafficAlert {
+  id          String   @id @default(uuid())
+  description String
+  latitude    Float
+  longitude   Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  routeId String
+
+  route Route @relation(fields: [routeId], references: [id])
+
+  @@map("traffic_alerts")
+}
+
+model DriverSubstitution {
+  id       String  @id @default(uuid())
+  date     String
+  isActive Boolean @default(true)
+
+  titularDriverId    String
+  substituteDriverId String
+  routeId            String
+
+  titularDriver    Driver @relation("TitularDriver", fields: [titularDriverId], references: [id])
+  substituteDriver Driver @relation("SubstituteDriver", fields: [substituteDriverId], references: [id])
+  route            Route  @relation(fields: [routeId], references: [id])
+
+  @@unique([routeId, date])
+  @@map("driver_substitutions")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  type      String   @default("PREDEFINED")
+  createdAt DateTime @default(now())
+
+  routeId  String
+  driverId String
+
+  route  Route  @relation(fields: [routeId], references: [id])
+  driver Driver @relation(fields: [driverId], references: [id])
+
+  @@map("messages")
+}

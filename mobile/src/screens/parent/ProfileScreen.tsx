@@ -1,0 +1,111 @@
+import React, { useState } from 'react';
+import { View, Text, ScrollView, Switch, StyleSheet, Alert } from 'react-native';
+import { colors, typography, spacing } from '@/config/theme';
+import { Card } from '@/components/common/Card';
+import { Button } from '@/components/common/Button';
+import { useAuthStore } from '@/store/auth.store';
+import { useAuth } from '@/hooks/useAuth';
+
+interface ProfileScreenProps {
+  navigation: any;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
+  const { user } = useAuthStore();
+  const { logout } = useAuth();
+  const [pushNotifications, setPushNotifications] = useState(true);
+  const [boardingAlerts, setBoardingAlerts] = useState(true);
+  const [arrivalAlerts, setArrivalAlerts] = useState(true);
+  const [deviationAlerts, setDeviationAlerts] = useState(true);
+
+  const handleLogout = () => {
+    Alert.alert('Cerrar sesión', '¿Estás seguro de que quieres cerrar sesión?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar sesión', style: 'destructive', onPress: logout },
+    ]);
+  };
+
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarInitial}>
+              {user?.name?.charAt(0).toUpperCase() ?? 'P'}
+            </Text>
+          </View>
+          <Text style={styles.userName}>{user?.name ?? 'Padre/Madre'}</Text>
+          <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
+        </View>
+
+        {/* Información del estudiante */}
+        <Text style={styles.sectionTitle}>Mi hijo/a</Text>
+        <Card>
+          <View style={styles.studentRow}>
+            <View style={styles.studentAvatar}>
+              <Text style={styles.studentInitial}>S</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.studentName}>Sofía González</Text>
+              <Text style={styles.studentDetail}>Ruta Matutina - La Salle</Text>
+              <Text style={styles.studentDetail}>Conductor: Oliver Saraguro</Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Notificaciones */}
+        <Text style={styles.sectionTitle}>Notificaciones</Text>
+        <Card>
+          <SettingRow label="Notificaciones push" value={pushNotifications} onToggle={setPushNotifications} />
+          <SettingRow label="Alerta de abordaje" value={boardingAlerts} onToggle={setBoardingAlerts} />
+          <SettingRow label="Alerta de llegada" value={arrivalAlerts} onToggle={setArrivalAlerts} />
+          <SettingRow label="Alerta de desvío" value={deviationAlerts} onToggle={setDeviationAlerts} last />
+        </Card>
+
+        {/* Cerrar sesión */}
+        <Button
+          title="Cerrar sesión"
+          onPress={handleLogout}
+          variant="danger"
+          size="lg"
+          style={styles.logoutButton}
+        />
+      </ScrollView>
+    </View>
+  );
+};
+
+function SettingRow({ label, value, onToggle, last = false }: { label: string; value: boolean; onToggle: (v: boolean) => void; last?: boolean }) {
+  return (
+    <View style={[styles.settingRow, !last && styles.settingBorder]}>
+      <Text style={styles.settingLabel}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ true: colors.primary, false: '#E0E0E0' }}
+        thumbColor="#FFF"
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  scroll: { padding: spacing.xl, paddingBottom: 40 },
+  avatarSection: { alignItems: 'center', marginBottom: spacing.xl },
+  avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  avatarInitial: { fontSize: 32, fontWeight: '800', color: '#FFF' },
+  userName: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text },
+  userEmail: { fontSize: typography.body.fontSize, color: colors.textSecondary, marginTop: 2 },
+  sectionTitle: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
+  studentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  studentAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center' },
+  studentInitial: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  studentName: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },
+  studentDetail: { fontSize: typography.small.fontSize, color: colors.textSecondary, marginTop: 2 },
+  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md },
+  settingBorder: { borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  settingLabel: { fontSize: typography.body.fontSize, color: colors.text },
+  logoutButton: { marginTop: spacing.xxl },
+});

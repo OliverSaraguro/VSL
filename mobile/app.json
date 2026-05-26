@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "VSL",
+    "slug": "vsl",
+    "version": "1.0.0",
+    "scheme": "vsl",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1B5E20"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vsl.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "VSL necesita acceder a tu ubicación para rastrear la ruta del transporte escolar.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "VSL necesita acceso continuo a tu ubicación para el rastreo en tiempo real del transporte."
+      }
+    },
+    "android": {
+      "package": "com.vsl.app",
+      "minSdkVersion": 26,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1B5E20"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-notifications",
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}
