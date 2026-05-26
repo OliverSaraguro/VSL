@@ -141,7 +141,7 @@ mobile/src/
 
 ## Equipo
 
-**Grupo 4** – Iván González, Pablo Mendoza, Oliver Saraguro, Vicente Valdivieso
+**Grupo 4** – Oliver Saraguro, Iván González, Pablo Mendoza, Vicente Valdivieso
 
 ## Licencia
 
