@@ -1,6 +1,8 @@
+import { supabase } from '../config/supabase';
 import { Coordinates } from '../types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
-type TrackingEventHandler = (data: unknown) => void;
+type TrackingEventHandler = (data: any) => void;
 
 interface LocationUpdate {
   tripId: string;
@@ -12,74 +14,127 @@ interface LocationUpdate {
 }
 
 class TrackingService {
-  private ws: WebSocket | null = null;
+  private channel: RealtimeChannel | null = null;
   private listeners: Map<string, Set<TrackingEventHandler>> = new Map();
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-  private pingInterval: ReturnType<typeof setInterval> | null = null;
-  private token: string | null = null;
+  private isSubscribed = false;
 
+  // Conectar usando Supabase Realtime Channels
   connect(token: string, tripId?: string): void {
-    this.token = token;
+    if (!tripId) return;
 
-    const baseUrl = __DEV__
-      ? 'ws://192.168.1.100:3000'
-      : 'wss://api.vsl-loja.com';
+    this.disconnect();
 
-    const params = new URLSearchParams({ token });
-    if (tripId) params.append('tripId', tripId);
+    // Crear un canal en tiempo real específico para este viaje
+    this.channel = supabase.channel(`trip:${tripId}`, {
+      config: {
+        broadcast: { self: true },
+      },
+    });
 
-    this.ws = new WebSocket(`${baseUrl}/tracking?${params.toString()}`);
+    this.channel
+      // Escuchar eventos de geolocalización transmitidos en tiempo real por el conductor
+      .on('broadcast', { event: 'location_update' }, ({ payload }) => {
+        this.emit('location_update', payload);
+      })
+      // Escuchar eventos de abordaje transmitidos por el conductor
+      .on('broadcast', { event: 'student_boarded' }, ({ payload }) => {
+        this.emit('student_boarded', payload);
+      })
+      .on('broadcast', { event: 'student_dropped' }, ({ payload }) => {
+        this.emit('student_dropped', payload);
+      })
+      // Escuchar también inserciones directas en la base de datos de la tabla boardings
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'boardings',
+          filter: `trip_id=eq.${tripId}`,
+        },
+        (payload) => {
+          this.emit('db_boarding_added', payload.new);
+        }
+      );
 
-    this.ws.onopen = () => {
-      this.reconnectAttempts = 0;
-      this.startPing();
-      this.emit('connected', null);
-    };
-
-    this.ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data as string) as {
-          type: string;
-          data: unknown;
-        };
-        this.emit(message.type, message.data);
-      } catch {
-        /* ignore malformed messages */
+    this.channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        this.isSubscribed = true;
+        this.emit('connected', null);
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        this.isSubscribed = false;
+        this.emit('disconnected', null);
       }
-    };
-
-    this.ws.onerror = () => {
-      this.emit('error', { message: 'WebSocket error' });
-    };
-
-    this.ws.onclose = () => {
-      this.stopPing();
-      this.emit('disconnected', null);
-      this.attemptReconnect(tripId);
-    };
+    });
   }
 
   disconnect(): void {
-    this.reconnectAttempts = this.maxReconnectAttempts;
-    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.stopPing();
-    this.ws?.close();
-    this.ws = null;
+    if (this.channel) {
+      this.channel.unsubscribe();
+      supabase.removeChannel(this.channel);
+      this.channel = null;
+    }
+    this.isSubscribed = false;
     this.listeners.clear();
   }
 
+  // Transmitir ubicación actual del GPS mediante broadcast
   sendLocation(update: LocationUpdate): void {
-    this.send('location_update', update);
+    if (!this.channel || !this.isSubscribed) return;
+
+    this.channel.send({
+      type: 'broadcast',
+      event: 'location_update',
+      payload: update,
+    });
   }
 
-  sendBoarding(tripId: string, studentId: string, stopId: string): void {
-    this.send('student_boarded', { tripId, studentId, stopId });
+  // Registrar abordaje en base de datos y transmitir el evento
+  async sendBoarding(tripId: string, studentId: string, stopId: string, coords?: Coordinates): Promise<void> {
+    // 1. Guardar de forma persistente en la tabla public.boardings
+    const { error } = await supabase.from('boardings').insert({
+      trip_id: tripId,
+      student_id: studentId,
+      latitude: coords?.latitude || 0,
+      longitude: coords?.longitude || 0,
+    });
+
+    if (error) {
+      console.error('Error al registrar abordaje en DB:', error.message);
+      throw error;
+    }
+
+    // 2. Transmitir evento en tiempo real a los oyentes (padres)
+    if (this.channel && this.isSubscribed) {
+      this.channel.send({
+        type: 'broadcast',
+        event: 'student_boarded',
+        payload: { tripId, studentId, stopId },
+      });
+    }
   }
 
-  sendDropoff(tripId: string, studentId: string, stopId: string): void {
-    this.send('student_dropped', { tripId, studentId, stopId });
+  // Registrar llegada/desabordaje y transmitir el evento
+  async sendDropoff(tripId: string, studentId: string, stopId: string, coords?: Coordinates): Promise<void> {
+    // En el esquema MVP, desabordar significa eliminar la fila de abordaje o marcarla (eliminamos para este ejemplo)
+    const { error } = await supabase
+      .from('boardings')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('student_id', studentId);
+
+    if (error) {
+      console.error('Error al registrar descenso en DB:', error.message);
+      throw error;
+    }
+
+    if (this.channel && this.isSubscribed) {
+      this.channel.send({
+        type: 'broadcast',
+        event: 'student_dropped',
+        payload: { tripId, studentId, stopId },
+      });
+    }
   }
 
   on(event: string, handler: TrackingEventHandler): () => void {
@@ -91,41 +146,11 @@ class TrackingService {
   }
 
   get isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.isSubscribed;
   }
 
-  private send(type: string, data: unknown): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type, data }));
-    }
-  }
-
-  private emit(event: string, data: unknown): void {
+  private emit(event: string, data: any): void {
     this.listeners.get(event)?.forEach((handler) => handler(data));
-  }
-
-  private attemptReconnect(tripId?: string): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts || !this.token) return;
-
-    this.reconnectAttempts++;
-    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-
-    this.reconnectTimeout = setTimeout(() => {
-      this.connect(this.token!, tripId);
-    }, delay);
-  }
-
-  private startPing(): void {
-    this.pingInterval = setInterval(() => {
-      this.send('ping', { timestamp: Date.now() });
-    }, 30000);
-  }
-
-  private stopPing(): void {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
-    }
   }
 }
 

@@ -30,7 +30,7 @@ const MOCK_STOPS = [
 
 interface ActiveRouteScreenProps {
   navigation: any;
-  route: { params: { routeId: string } };
+  route: any;
 }
 
 export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation }) => {

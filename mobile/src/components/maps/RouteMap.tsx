@@ -2,7 +2,9 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { colors, spacing } from '@/config/theme';
-import type { RouteStop, Coordinate } from '@/types';
+import type { Stop, Coordinates } from '@/types';
+type RouteStop = Stop & { absent?: boolean; studentName?: string };
+type Coordinate = Coordinates;
 
 interface RouteMapProps {
   stops: RouteStop[];

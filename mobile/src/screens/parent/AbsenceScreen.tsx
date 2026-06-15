@@ -143,7 +143,7 @@ export const AbsenceScreen: React.FC<AbsenceScreenProps> = ({ navigation }) => {
       <Header title="Registrar Ausencia" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Aviso de horario */}
-        <Card style={[styles.timeCard, !allowed && styles.timeCardWarning]}>
+        <Card style={StyleSheet.flatten([styles.timeCard, !allowed && styles.timeCardWarning])}>
           <Text style={styles.timeIcon}>{allowed ? '✅' : '⏰'}</Text>
           <Text style={[styles.timeText, !allowed && styles.timeTextWarning]}>
             {allowed

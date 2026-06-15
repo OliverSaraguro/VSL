@@ -90,6 +90,7 @@ export interface Stop {
   order: number;
   estimatedTime: string;
   students: Student[];
+  studentId?: string;
 }
 
 export interface Trip {
@@ -113,7 +114,7 @@ export interface Boarding {
   tripId: string;
   studentId: string;
   student?: Student;
-  stopId: string;
+  stopId?: string;
   stop?: Stop;
   boardedAt?: string;
   droppedAt?: string;

@@ -6,6 +6,7 @@ import { colors, typography } from '../config/theme';
 
 import { DashboardScreen } from '../screens/driver/DashboardScreen';
 import { StudentsScreen } from '../screens/driver/StudentsScreen';
+import { RegisterStudentScreen } from '../screens/driver/RegisterStudentScreen';
 import { PaymentsScreen } from '../screens/driver/PaymentsScreen';
 import { ProfileScreen } from '../screens/driver/ProfileScreen';
 import { CreateRouteScreen } from '../screens/driver/CreateRouteScreen';
@@ -21,6 +22,7 @@ export type DriverTabParamList = {
 
 const Tab = createBottomTabNavigator<DriverTabParamList>();
 const Stack = createStackNavigator();
+const StudentsStack = createStackNavigator();
 
 function RoutesStack() {
   return (
@@ -35,6 +37,19 @@ function RoutesStack() {
       <Stack.Screen name="CreateRoute" component={CreateRouteScreen} options={{ title: 'Nueva Ruta' }} />
       <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} options={{ title: 'Ruta Activa', headerShown: false }} />
     </Stack.Navigator>
+  );
+}
+
+function StudentsStackNavigator() {
+  return (
+    <StudentsStack.Navigator
+      screenOptions={{
+        headerShown: false, // Desactivado porque los componentes de pantalla dibujan sus propios encabezados
+      }}
+    >
+      <StudentsStack.Screen name="StudentsList" component={StudentsScreen} />
+      <StudentsStack.Screen name="RegisterStudent" component={RegisterStudentScreen} />
+    </StudentsStack.Navigator>
   );
 }
 
@@ -93,8 +108,8 @@ export default function DriverNavigator() {
       />
       <Tab.Screen
         name="DriverStudents"
-        component={StudentsScreen}
-        options={{ title: 'Estudiantes', tabBarLabel: 'Estudiantes' }}
+        component={StudentsStackNavigator}
+        options={{ title: 'Estudiantes', tabBarLabel: 'Estudiantes', headerShown: false }}
       />
       <Tab.Screen
         name="DriverPayments"

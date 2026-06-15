@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing } from '@/config/theme';
 import { Header } from '@/components/common/Header';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
@@ -40,9 +41,11 @@ export const StudentsScreen: React.FC<StudentsScreenProps> = ({ navigation }) =>
     }
   }, []);
 
-  useEffect(() => {
-    loadStudents();
-  }, [loadStudents]);
+  useFocusEffect(
+    useCallback(() => {
+      loadStudents();
+    }, [loadStudents])
+  );
 
   useEffect(() => {
     if (!search.trim()) {

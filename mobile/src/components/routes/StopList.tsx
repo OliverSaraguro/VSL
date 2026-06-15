@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { colors, typography, spacing } from '@/config/theme';
-import type { RouteStop } from '@/types';
+import type { Stop } from '@/types';
+type RouteStop = Stop & { absent?: boolean; studentName?: string };
 
 interface StopListProps {
   stops: RouteStop[];

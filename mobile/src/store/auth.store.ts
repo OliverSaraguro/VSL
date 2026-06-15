@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserRole } from '../types';
 import authService from '../services/auth.service';
+import { supabase } from '../config/supabase';
 
 interface AuthState {
   user: User | null;
@@ -15,6 +16,7 @@ interface AuthState {
   logout: () => Promise<void>;
   loadProfile: () => Promise<void>;
   setHydrated: () => void;
+  syncSession: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -43,6 +45,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        set({ isLoading: true });
         try {
           await authService.logout();
         } finally {
@@ -50,12 +53,12 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             token: null,
             isAuthenticated: false,
+            isLoading: false,
           });
         }
       },
 
       loadProfile: async () => {
-        if (!get().token) return;
         set({ isLoading: true });
         try {
           const user = await authService.getProfile();
@@ -66,6 +69,40 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setHydrated: () => set({ isHydrated: true }),
+
+      syncSession: async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          try {
+            const { data: profile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            if (profile) {
+              set({
+                user: {
+                  id: profile.id,
+                  email: profile.email,
+                  name: profile.name,
+                  phone: profile.phone,
+                  role: profile.role as UserRole,
+                  photoUrl: profile.photo_url,
+                  isActive: profile.is_active,
+                  createdAt: profile.created_at,
+                  updatedAt: profile.updated_at,
+                },
+                token: session.access_token,
+                isAuthenticated: true,
+              });
+            }
+          } catch {
+            // Ignorar errores al recuperar perfil para no interrumpir
+          }
+        }
+        set({ isHydrated: true });
+      }
     }),
     {
       name: '@vsl/auth',
@@ -76,11 +113,57 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
-        state?.setHydrated();
+        // Ejecutar sincronización con Supabase una vez hidratado el almacén
+        state?.syncSession();
       },
     },
   ),
 );
+
+// Escuchar cambios de autenticación en Supabase en segundo plano
+supabase.auth.onAuthStateChange(async (event, session) => {
+  const store = useAuthStore.getState();
+  
+  if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    if (session?.user) {
+      try {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile) {
+          useAuthStore.setState({
+            user: {
+              id: profile.id,
+              email: profile.email,
+              name: profile.name,
+              phone: profile.phone,
+              role: profile.role as UserRole,
+              photoUrl: profile.photo_url,
+              isActive: profile.is_active,
+              createdAt: profile.created_at,
+              updatedAt: profile.updated_at,
+            },
+            token: session.access_token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        }
+      } catch {
+        // En caso de error, mantener lo que haya o esperar reintentar
+      }
+    }
+  } else if (event === 'SIGNED_OUT') {
+    useAuthStore.setState({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  }
+});
 
 export const selectIsDriver = (state: AuthState) =>
   state.user?.role === UserRole.DRIVER;
