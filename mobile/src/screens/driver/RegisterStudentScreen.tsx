@@ -94,7 +94,7 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
     if (!validate()) return;
     setLoading(true);
     try {
-      await studentsService.create({
+      const student = await studentsService.create({
         ...form,
         latitude: houseLocation!.latitude,
         longitude: houseLocation!.longitude,
@@ -102,6 +102,20 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
       Alert.alert('Registrado', 'El estudiante ha sido registrado exitosamente.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
+
+      if (student.invitationCode) {
+        Alert.alert(
+          'Estudiante registrado',
+          `Comparte este código con el representante para que se vincule desde la app (válido 48 horas):\n\n${student.invitationCode}`,
+          [{ text: 'Entendido', onPress: () => navigation.goBack() }],
+        );
+      } else {
+        Alert.alert(
+          'Estudiante registrado',
+          'El estudiante ha sido registrado y vinculado automáticamente al representante (ya tenía cuenta con ese correo).',
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'No se pudo registrar al estudiante.');
     } finally {

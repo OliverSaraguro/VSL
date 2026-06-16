@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
+import { Input } from '@/components/common/Input';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuth } from '@/hooks/useAuth';
 import studentsService from '@/servicios/students.service';
@@ -24,28 +25,44 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   const [deviationAlerts, setDeviationAlerts] = useState(true);
   const [myStudents, setMyStudents] = useState<Student[]>([]);
   const [driverName, setDriverName] = useState('—');
+  const [linkCode, setLinkCode] = useState('');
+  const [linking, setLinking] = useState(false);
 
-  useEffect(() => {
-    const loadStudents = async () => {
-      try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) return;
+  const loadStudents = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
 
-        const list = await studentsService.getByParent(authUser.id);
-        setMyStudents(list);
+      const list = await studentsService.getByParent(authUser.id);
+      setMyStudents(list);
 
-        if (list.length > 0 && list[0].driverId) {
-          const { data } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', list[0].driverId)
-            .single();
-          if (data) setDriverName(data.name);
-        }
-      } catch {}
-    };
-    loadStudents();
-  }, []);
+      if (list.length > 0 && list[0].driverId) {
+        const { data } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', list[0].driverId)
+          .single();
+        if (data) setDriverName(data.name);
+      }
+    } catch {}
+  };
+
+  useEffect(() => { loadStudents(); }, []);
+
+  const handleLinkCode = async () => {
+    if (!linkCode.trim()) return;
+    setLinking(true);
+    try {
+      await studentsService.redeemInvitationCode(linkCode.trim());
+      setLinkCode('');
+      Alert.alert('Vinculado', 'Tu cuenta quedó vinculada al estudiante correctamente.');
+      await loadStudents();
+    } catch (err: any) {
+      Alert.alert('No se pudo vincular', err?.message || 'Código inválido o expirado.');
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Cerrar sesión', '¿Estás seguro de que quieres cerrar sesión?', [
@@ -97,6 +114,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             </Card>
           ))
         )}
+
+        {/* Vincular código de invitación (registro inicial fallido o un hijo adicional) */}
+        <Text style={styles.sectionTitle}>Vincular estudiante</Text>
+        <Card>
+          <Text style={styles.linkHelp}>
+            Ingresa el código de invitación que te dio el conductor (válido por 48 horas).
+          </Text>
+          <Input
+            label="Código de invitación"
+            placeholder="VSL-XXXX-XXXX"
+            value={linkCode}
+            onChangeText={setLinkCode}
+            autoCapitalize="characters"
+          />
+          <Button
+            title="Vincular código"
+            onPress={handleLinkCode}
+            loading={linking}
+            size="md"
+            style={styles.linkButton}
+          />
+        </Card>
 
         {/* Notificaciones */}
         <Text style={styles.sectionTitle}>Notificaciones</Text>
@@ -153,6 +192,8 @@ const styles = StyleSheet.create({
   studentName: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },
   studentDetail: { fontSize: typography.small.fontSize, color: colors.textSecondary, marginTop: 2 },
   emptyText: { fontSize: typography.body.fontSize, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.md },
+  linkHelp: { fontSize: typography.small.fontSize, color: colors.textSecondary, marginBottom: spacing.sm },
+  linkButton: { marginTop: spacing.sm },
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md },
   settingBorder: { borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   settingLabel: { fontSize: typography.body.fontSize, color: colors.text },

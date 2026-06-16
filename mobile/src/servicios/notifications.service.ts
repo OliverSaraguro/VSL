@@ -1,4 +1,7 @@
-import * as ExpoNotifications from 'expo-notifications';
+// Import de solo-tipos: no carga el módulo en tiempo de ejecución, así que no dispara el
+// aviso de "removido de Expo Go" mientras nadie llame a las funciones de push de abajo.
+// La carga real ocurre de forma diferida (require) dentro de cada método.
+import type * as ExpoNotifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 import { useAuthStore } from '../store/auth.store';
@@ -100,6 +103,47 @@ class NotificationsService {
     if (error) throw error;
   }
 
+  // Crea una notificación in-app para un usuario puntual. En Expo Go (sin development build) no
+  // hay push remoto real (ver warnOfExpoGoPushUsage), así que esta tabla + el badge del dashboard
+  // hacen de "push" mientras se prueba: el padre la ve apenas abre la app o refresca su panel.
+  async create(
+    userId: string,
+    title: string,
+    body: string,
+    type: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    const { error } = await withTimeout(
+      supabase.from('notifications').insert({
+        user_id: userId,
+        title,
+        body,
+        type,
+        data: data ?? null,
+      }),
+      'crear notificación',
+    );
+    if (error) console.warn('No se pudo crear la notificación:', error.message);
+  }
+
+  // Igual que create() pero para varios destinatarios a la vez (p. ej. todos los padres de una ruta)
+  async createMany(
+    userIds: string[],
+    title: string,
+    body: string,
+    type: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    const { error } = await withTimeout(
+      supabase.from('notifications').insert(
+        userIds.map((userId) => ({ user_id: userId, title, body, type, data: data ?? null })),
+      ),
+      'crear notificaciones',
+    );
+    if (error) console.warn('No se pudieron crear las notificaciones:', error.message);
+  }
+
   async getUnreadCount(): Promise<number> {
     const userId = getCurrentUserId();
     if (!userId) return 0;
@@ -118,6 +162,8 @@ class NotificationsService {
   }
 
   async registerPushToken(): Promise<void> {
+    const ExpoNotifications: typeof import('expo-notifications') = require('expo-notifications');
+
     const { status: existingStatus } = await ExpoNotifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
@@ -144,6 +190,8 @@ class NotificationsService {
   }
 
   configurePushNotifications(): void {
+    const ExpoNotifications: typeof import('expo-notifications') = require('expo-notifications');
+
     ExpoNotifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -158,13 +206,15 @@ class NotificationsService {
   onNotificationReceived(
     callback: (notification: ExpoNotifications.Notification) => void,
   ): ExpoNotifications.EventSubscription {
-    return ExpoNotifications.addNotificationReceivedListener(callback);
+    const ExpoNotificationsRuntime: typeof import('expo-notifications') = require('expo-notifications');
+    return ExpoNotificationsRuntime.addNotificationReceivedListener(callback);
   }
 
   onNotificationResponse(
     callback: (response: ExpoNotifications.NotificationResponse) => void,
   ): ExpoNotifications.EventSubscription {
-    return ExpoNotifications.addNotificationResponseReceivedListener(callback);
+    const ExpoNotificationsRuntime: typeof import('expo-notifications') = require('expo-notifications');
+    return ExpoNotificationsRuntime.addNotificationResponseReceivedListener(callback);
   }
 }
 

@@ -64,10 +64,20 @@ export const RegisterParentScreen: React.FC<RegisterParentScreenProps> = ({ navi
     if (!validate()) return;
     setLoading(true);
     try {
-      await authService.registerParent(form);
-      Alert.alert('Registro exitoso', 'Tu cuenta ha sido creada. Inicia sesión.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      const result = await authService.registerParent(form);
+      const linkWarning = (result as any).linkWarning as string | undefined;
+
+      if (linkWarning) {
+        Alert.alert(
+          'Cuenta creada, pero falta vincular',
+          `Tu cuenta se creó correctamente, pero no se pudo vincular el código de invitación: ${linkWarning}\n\nPuedes intentarlo de nuevo desde tu perfil una vez que inicies sesión.`,
+          [{ text: 'Entendido', onPress: () => navigation.goBack() }],
+        );
+      } else {
+        Alert.alert('Registro exitoso', 'Tu cuenta ha sido creada y vinculada a tu hijo/a. Inicia sesión.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (err: any) {
       console.error('[RegisterParentScreen] handleRegister', err);
       Alert.alert('Error', err?.message || 'No se pudo completar el registro.');

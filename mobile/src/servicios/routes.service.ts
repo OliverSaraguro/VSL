@@ -295,20 +295,67 @@ class RoutesService {
   async getActiveTrip(): Promise<Trip | null> {
     const userId = getCurrentUserId();
     if (!userId) return null;
+    return this.getActiveTripByDriver(userId);
+  }
+
+  // Variante para que un padre consulte el viaje activo del conductor de SU hijo (no el propio).
+  // La política de RLS de "trips" permite lectura a cualquier usuario autenticado.
+  async getActiveTripByDriver(driverId: string): Promise<Trip | null> {
+    if (!driverId) return null;
 
     const { data, error } = await withTimeout(
       supabase
         .from('trips')
         .select('*, boardings(*)')
-        .eq('driver_id', userId)
+        .or(`driver_id.eq.${driverId},substitute_driver_id.eq.${driverId}`)
         .in('status', ['in_progress', 'paused'])
+        .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      'cargar viaje activo',
+      'cargar viaje activo del conductor',
     );
 
     if (error) throw error;
     return data ? mapTrip(data) : null;
+  }
+
+  // Última ruta finalizada del conductor (para mostrar "última posición conocida" cuando no hay
+  // viaje activo, y para el resumen de fin de recorrido).
+  async getLastTripByDriver(driverId: string): Promise<Trip | null> {
+    if (!driverId) return null;
+
+    const { data, error } = await withTimeout(
+      supabase
+        .from('trips')
+        .select('*, boardings(*)')
+        .eq('driver_id', driverId)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      'cargar último viaje del conductor',
+    );
+
+    if (error) throw error;
+    return data ? mapTrip(data) : null;
+  }
+
+  // Ruta activa del conductor del estudiante de un padre (no la del usuario autenticado).
+  async getTodayRouteByDriver(driverId: string): Promise<Route | null> {
+    if (!driverId) return null;
+
+    const { data, error } = await withTimeout(
+      supabase
+        .from('routes')
+        .select('*, stops(*, student:students(*))')
+        .eq('driver_id', driverId)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle(),
+      'cargar ruta del conductor',
+    );
+
+    if (error) throw error;
+    return data ? mapRoute(data) : null;
   }
 
   async startTrip(routeId: string): Promise<Trip> {

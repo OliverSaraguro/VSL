@@ -9,7 +9,37 @@ import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { useAuthStore } from '@/store/auth.store';
 import notificationsService from '@/servicios/notifications.service';
 import studentsService from '@/servicios/students.service';
+import paymentsService from '@/servicios/payments.service';
 import { supabase } from '@/config/supabase';
+
+// HU24: si hay un pago pendiente con fecha de corte ya vencida, asegura que exista un
+// recordatorio en el feed de notificaciones (sin duplicar si ya se generó uno antes).
+async function ensurePaymentReminders(studentId: string, userId: string): Promise<void> {
+  try {
+    const overdue = await paymentsService.getOverduePendingForStudent(studentId);
+    for (const payment of overdue) {
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('type', 'payment_reminder')
+        .eq('data->>paymentId', payment.id)
+        .maybeSingle();
+
+      if (!existing) {
+        await notificationsService.create(
+          userId,
+          'Mensualidad pendiente',
+          `La mensualidad de ${payment.studentName} (mes ${payment.month}) está pendiente de pago.`,
+          'payment_reminder',
+          { paymentId: payment.id },
+        );
+      }
+    }
+  } catch {
+    // Silencioso: un fallo en el recordatorio no debe romper el dashboard
+  }
+}
 
 interface ParentDashboardProps {
   navigation: any;
@@ -40,6 +70,7 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
       if (studentsList.length > 0) {
         const student = studentsList[0];
         setStudentName(student.name);
+        await ensurePaymentReminders(student.id, authUser.id);
 
         if (student.driverId) {
           const [driverResult, tripResult] = await Promise.all([

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/config/supabase';
+import { LOW_POWER_MODE_KEY } from '@/config/lowPowerMode';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -55,6 +57,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
     };
     loadMeta();
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(LOW_POWER_MODE_KEY).then((value) => setLowPowerMode(value === 'true'));
+  }, []);
+
+  const handleToggleLowPower = async (value: boolean) => {
+    setLowPowerMode(value);
+    await AsyncStorage.setItem(LOW_POWER_MODE_KEY, value ? 'true' : 'false');
+  };
 
   const handleLogout = () => {
     Alert.alert('Cerrar sesión', '¿Estás seguro de que quieres cerrar sesión?', [
@@ -101,7 +112,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             </View>
             <Switch
               value={lowPowerMode}
-              onValueChange={setLowPowerMode}
+              onValueChange={handleToggleLowPower}
               trackColor={{ false: '#E0E0E0', true: '#A5D6A7' }}
               thumbColor={lowPowerMode ? colors.success : '#FAFAFA'}
             />

@@ -147,8 +147,9 @@ class AuthService {
     if (!authData.user) throw new Error('Error al registrar padre');
 
     const userId = authData.user.id;
-    const invitationCode = payload.invitationCode ||
-      Math.random().toString(36).substring(2, 10).toUpperCase();
+    // Este campo solo identifica el registro en public.parents; el vínculo real con el
+    // estudiante lo hace redeem_invitation_code() con el código que ingresó el padre.
+    const parentRecordId = `PARENT-${userId.slice(0, 8).toUpperCase()}`;
 
     console.log('[auth] registerParent: insert users...', userId);
     const { error: userError } = await withTimeout(
@@ -168,12 +169,30 @@ class AuthService {
     const { error: parentError } = await withTimeout(
       supabase.from('parents').insert({
         id: userId,
-        invitation_code: invitationCode,
+        invitation_code: parentRecordId,
       }),
       'guardar datos del padre',
     );
     console.log('[auth] registerParent: insert parents result', { parentError });
     if (parentError) throw new Error(`Error al guardar datos del padre: ${parentError.message}`);
+
+    // Canjear el código de invitación del ESTUDIANTE (el que dio el conductor) para vincular
+    // a este padre con el niño correcto. Si falla (código inválido/expirado), la cuenta ya quedó
+    // creada: se lo informamos al padre para que lo intente de nuevo desde su perfil.
+    let linkWarning: string | undefined;
+    if (payload.invitationCode && payload.invitationCode.trim()) {
+      try {
+        const { error: redeemError } = await withTimeout(
+          supabase.rpc('redeem_invitation_code', {
+            code: payload.invitationCode.trim().toUpperCase(),
+          }),
+          'vincular código de invitación',
+        );
+        if (redeemError) throw new Error(redeemError.message);
+      } catch (err: any) {
+        linkWarning = err?.message || 'No se pudo vincular el código de invitación.';
+      }
+    }
 
     return {
       user: {
@@ -185,7 +204,8 @@ class AuthService {
       },
       token: authData.session?.access_token || '',
       refreshToken: authData.session?.refresh_token,
-    };
+      linkWarning,
+    } as AuthResponse & { linkWarning?: string };
   }
 
   // Cerrar sesión
