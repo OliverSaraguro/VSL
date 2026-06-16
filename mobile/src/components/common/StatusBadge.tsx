@@ -9,9 +9,9 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<RouteStatus, { label: string; bg: string; text: string }> = {
-  ACTIVA: { label: 'Activa', bg: '#E8F5E9', text: colors.success },
-  EN_PAUSA: { label: 'En pausa', bg: '#FFF8E1', text: '#F57F17' },
-  FINALIZADA: { label: 'Finalizada', bg: '#EEEEEE', text: '#757575' },
+  ACTIVA: { label: 'Activa', bg: '#EFF6FF', text: colors.secondary },
+  EN_PAUSA: { label: 'En pausa', bg: '#FFFBEB', text: '#B45309' },
+  FINALIZADA: { label: 'Finalizada', bg: '#F1F5F9', text: colors.statusFinished },
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {

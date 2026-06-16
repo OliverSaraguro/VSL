@@ -6,9 +6,10 @@ import {
   Switch,
   StyleSheet,
   Alert,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '@/config/theme';
-import { Header } from '@/components/common/Header';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { useAuthStore } from '@/store/auth.store';
@@ -26,7 +27,8 @@ interface DriverMeta {
   licenseNumber: string;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { logout } = useAuth();
   const [lowPowerMode, setLowPowerMode] = useState(false);
@@ -63,7 +65,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Header title="Mi Perfil" onBack={() => navigation.goBack()} />
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 4 : 0) + spacing.sm }]}>
+        <Text style={styles.pageTitle}>Perfil</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Avatar */}
         <View style={styles.avatarSection}>
@@ -132,6 +136,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  header: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.primary,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  pageSub: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 2,
+  },
   scroll: {
     padding: spacing.xl,
     paddingBottom: 40,
@@ -158,6 +177,7 @@ const styles = StyleSheet.create({
     fontSize: typography.h2.fontSize,
     fontWeight: '700',
     color: colors.text,
+    textAlign: 'center',
   },
   userEmail: {
     fontSize: typography.body.fontSize,

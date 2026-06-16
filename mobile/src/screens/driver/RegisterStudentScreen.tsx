@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/config/theme';
 import { Header } from '@/components/common/Header';
 import { Input } from '@/components/common/Input';
@@ -56,10 +57,8 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
   const [locationError, setLocationError] = useState('');
   const { getCurrentLocation } = useLocation();
 
-  const update = (field: keyof StudentForm) => (value: string) => {
+  const update = (field: keyof StudentForm) => (value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  };
 
   const validate = (): boolean => {
     const e: typeof errors = {};
@@ -68,18 +67,12 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
     if (!form.parentName.trim()) e.parentName = 'Nombre del representante obligatorio';
     if (!form.parentPhone.trim()) e.parentPhone = 'Teléfono obligatorio';
     setErrors(e);
-
     if (!houseLocation) {
       setLocationError('Toca el mapa para marcar la casa del estudiante');
       return false;
     }
     setLocationError('');
     return Object.keys(e).length === 0;
-  };
-
-  const handlePickPhoto = () => {
-    // Placeholder: integrar expo-image-picker
-    Alert.alert('Foto', 'Funcionalidad de selección de foto pendiente.');
   };
 
   const handleMapPress = (e: any) => {
@@ -93,7 +86,7 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
       setHouseLocation(coords);
       setLocationError('');
     } else {
-      Alert.alert('Ubicación', 'No se pudo obtener tu ubicación actual. Activa el GPS e intenta de nuevo.');
+      Alert.alert('Ubicación', 'No se pudo obtener tu ubicación. Activa el GPS e intenta de nuevo.');
     }
   };
 
@@ -106,7 +99,7 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
         latitude: houseLocation!.latitude,
         longitude: houseLocation!.longitude,
       });
-      Alert.alert('Estudiante registrado', 'El estudiante ha sido registrado exitosamente.', [
+      Alert.alert('Registrado', 'El estudiante ha sido registrado exitosamente.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
@@ -119,6 +112,7 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
   return (
     <View style={styles.container}>
       <Header title="Registrar Estudiante" onBack={() => navigation.goBack()} />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -131,30 +125,52 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
           {/* Foto */}
           <TouchableOpacity
             style={styles.photoContainer}
-            onPress={handlePickPhoto}
+            onPress={() => Alert.alert('Foto', 'Funcionalidad de selección de foto próximamente.')}
             accessibilityLabel="Seleccionar foto del estudiante"
           >
             {form.photoUrl ? (
               <Image source={{ uri: form.photoUrl }} style={styles.photo} />
             ) : (
               <View style={styles.photoPlaceholder}>
-                <Text style={styles.photoIcon}>📷</Text>
+                <MaterialIcons name="photo-camera" size={28} color={colors.secondary} />
                 <Text style={styles.photoText}>Agregar foto</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          <Text style={styles.section}>Datos del estudiante</Text>
-          <Input label="Nombre completo" placeholder="Ana García" value={form.name} onChangeText={update('name')} error={errors.name} />
-          <Input label="Dirección de recogida" placeholder="Calle Sucre 12-34 y Bolívar" value={form.address} onChangeText={update('address')} error={errors.address} />
+          {/* Sección estudiante */}
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="school" size={18} color={colors.secondary} />
+            <Text style={styles.section}>Datos del estudiante</Text>
+          </View>
 
+          <Input
+            label="Nombre completo"
+            placeholder="Ana García"
+            value={form.name}
+            onChangeText={update('name')}
+            error={errors.name}
+            icon={<MaterialIcons name="person" size={18} color={colors.textSecondary} />}
+          />
+          <Input
+            label="Dirección de recogida"
+            placeholder="Calle Sucre 12-34 y Bolívar"
+            value={form.address}
+            onChangeText={update('address')}
+            error={errors.address}
+            icon={<MaterialIcons name="home" size={18} color={colors.textSecondary} />}
+          />
+
+          {/* Mapa */}
           <View style={styles.mapHeaderRow}>
             <Text style={styles.mapLabel}>Ubicación exacta de la casa</Text>
-            <TouchableOpacity onPress={handleUseMyLocation}>
-              <Text style={styles.useLocationLink}>📍 Usar mi ubicación actual</Text>
+            <TouchableOpacity style={styles.locationBtn} onPress={handleUseMyLocation}>
+              <MaterialIcons name="my-location" size={14} color={colors.secondary} />
+              <Text style={styles.locationBtnText}>Mi ubicación</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.mapHelp}>Toca el mapa en el punto exacto de la casa del estudiante:</Text>
+          <Text style={styles.mapHelp}>Toca el mapa para marcar el punto exacto:</Text>
+
           <View style={[styles.mapWrapper, !!locationError && styles.mapWrapperError]}>
             <MapView
               style={styles.map}
@@ -163,16 +179,59 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
               onPress={handleMapPress}
             >
               {houseLocation && (
-                <Marker coordinate={houseLocation} title="Casa del estudiante" pinColor={colors.primary} />
+                <Marker
+                  coordinate={houseLocation}
+                  title="Casa del estudiante"
+                  pinColor={colors.secondary}
+                />
               )}
             </MapView>
+            {!houseLocation && (
+              <View style={styles.mapOverlay} pointerEvents="none">
+                <MaterialIcons name="touch-app" size={32} color="rgba(30,58,95,0.5)" />
+                <Text style={styles.mapOverlayText}>Toca para marcar</Text>
+              </View>
+            )}
           </View>
-          {!!locationError && <Text style={styles.errorTextMap}>{locationError}</Text>}
+          {!!locationError && (
+            <View style={styles.errorRow}>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={styles.errorTextMap}>{locationError}</Text>
+            </View>
+          )}
 
-          <Text style={styles.section}>Datos del representante</Text>
-          <Input label="Nombre del representante" placeholder="Carlos García" value={form.parentName} onChangeText={update('parentName')} error={errors.parentName} />
-          <Input label="Teléfono" placeholder="0991234567" value={form.parentPhone} onChangeText={update('parentPhone')} error={errors.parentPhone} keyboardType="phone-pad" />
-          <Input label="Correo electrónico (opcional)" placeholder="padre@ejemplo.com" value={form.parentEmail} onChangeText={update('parentEmail')} error={errors.parentEmail} keyboardType="email-address" />
+          {/* Sección representante */}
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="family-restroom" size={18} color={colors.secondary} />
+            <Text style={styles.section}>Datos del representante</Text>
+          </View>
+
+          <Input
+            label="Nombre del representante"
+            placeholder="Carlos García"
+            value={form.parentName}
+            onChangeText={update('parentName')}
+            error={errors.parentName}
+            icon={<MaterialIcons name="person-outline" size={18} color={colors.textSecondary} />}
+          />
+          <Input
+            label="Teléfono"
+            placeholder="0991234567"
+            value={form.parentPhone}
+            onChangeText={update('parentPhone')}
+            error={errors.parentPhone}
+            keyboardType="phone-pad"
+            icon={<MaterialIcons name="phone" size={18} color={colors.textSecondary} />}
+          />
+          <Input
+            label="Correo electrónico (opcional)"
+            placeholder="padre@ejemplo.com"
+            value={form.parentEmail}
+            onChangeText={update('parentEmail')}
+            error={errors.parentEmail}
+            keyboardType="email-address"
+            icon={<MaterialIcons name="email" size={18} color={colors.textSecondary} />}
+          />
 
           <Button
             title="Registrar Estudiante"
@@ -192,69 +251,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  flex: {
-    flex: 1,
-  },
+  flex: { flex: 1 },
   scroll: {
-    padding: spacing.xl,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingBottom: 48,
   },
   photoContainer: {
     alignSelf: 'center',
     marginBottom: spacing.lg,
+    marginTop: spacing.sm,
   },
   photo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
   },
   photoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#E8F5E9',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: colors.secondary,
     borderStyle: 'dashed',
   },
-  photoIcon: {
-    fontSize: 28,
-  },
   photoText: {
-    fontSize: 11,
-    color: colors.primary,
+    fontSize: 10,
+    color: colors.secondary,
     fontWeight: '600',
     marginTop: 4,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  section: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
   },
   mapHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
+    marginBottom: 4,
   },
   mapLabel: {
     fontSize: typography.small.fontSize,
     fontWeight: '600',
     color: colors.textSecondary,
   },
-  useLocationLink: {
+  locationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+  },
+  locationBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.secondary,
   },
   mapHelp: {
     fontSize: typography.small.fontSize,
     color: colors.textSecondary,
-    marginTop: 4,
     marginBottom: spacing.sm,
   },
   mapWrapper: {
     height: 200,
     borderRadius: 16,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: spacing.xs,
   },
@@ -262,22 +338,31 @@ const styles = StyleSheet.create({
     borderColor: colors.error,
     borderWidth: 2,
   },
-  map: {
-    flex: 1,
+  map: { flex: 1 },
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(248,250,252,0.45)',
+  },
+  mapOverlayText: {
+    fontSize: 12,
+    color: 'rgba(30,58,95,0.6)',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: spacing.sm,
   },
   errorTextMap: {
     fontSize: 12,
     color: colors.error,
-    marginBottom: spacing.sm,
-  },
-  section: {
-    fontSize: typography.h3.fontSize,
-    fontWeight: '700',
-    color: colors.primary,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
   },
   submitButton: {
     marginTop: spacing.xl,
+    borderRadius: 14,
   },
 });

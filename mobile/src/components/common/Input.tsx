@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  TextInputProps,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/config/theme';
 
 interface InputProps extends Omit<TextInputProps, 'style'> {
@@ -23,32 +32,82 @@ export const Input: React.FC<InputProps> = ({
   ...rest
 }) => {
   const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // JS driver para interpolación de color
+  const focusAnim = useRef(new Animated.Value(0)).current;
+  // Native driver para escala del label
+  const labelScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(focusAnim, {
+      toValue: focused ? 1 : 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+
+    Animated.spring(labelScale, {
+      toValue: focused ? 0.95 : 1,
+      useNativeDriver: true,
+      tension: 220,
+      friction: 10,
+    }).start();
+  }, [focused, focusAnim, labelScale]);
+
+  const borderColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: error
+      ? [colors.error, colors.error]
+      : [colors.border, colors.secondary],
+  });
+
+  const isPassword = !!secureTextEntry;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
-      <View
-        style={[
-          styles.inputWrapper,
-          focused && styles.inputFocused,
-          error ? styles.inputError : null,
-        ]}
-      >
-        {icon && <View style={styles.icon}>{icon}</View>}
+      <Animated.View style={{ transform: [{ scale: labelScale }], alignSelf: 'flex-start' }}>
+        <Text style={[styles.label, focused && styles.labelFocused, !!error && styles.labelError]}>
+          {label}
+        </Text>
+      </Animated.View>
+
+      <Animated.View style={[styles.inputWrapper, { borderColor }]}>
+        {icon && <View style={styles.iconContainer}>{icon}</View>}
+
         <TextInput
-          style={[styles.input, icon ? styles.inputWithIcon : null]}
+          style={[
+            styles.input,
+            icon ? styles.inputWithIcon : null,
+            isPassword ? styles.inputWithEye : null,
+          ]}
           placeholder={placeholder}
           placeholderTextColor={colors.textSecondary}
           value={value}
           onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
+          secureTextEntry={isPassword && !showPassword}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           autoCapitalize="none"
           accessibilityLabel={label}
           {...rest}
         />
-      </View>
+
+        {isPassword && (
+          <TouchableOpacity
+            onPress={() => setShowPassword((p) => !p)}
+            style={styles.eyeBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          >
+            <MaterialIcons
+              name={showPassword ? 'visibility' : 'visibility-off'}
+              size={20}
+              color={focused ? colors.secondary : colors.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+      </Animated.View>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -61,25 +120,24 @@ const styles = StyleSheet.create({
   label: {
     fontSize: typography.fontSize.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textSecondary,
     marginBottom: spacing.xs,
+  },
+  labelFocused: {
+    color: colors.secondary,
+  },
+  labelError: {
+    color: colors.error,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#E0E0E0',
     borderRadius: 12,
     paddingHorizontal: spacing.md,
   },
-  inputFocused: {
-    borderColor: colors.primary,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
-  icon: {
+  iconContainer: {
     marginRight: spacing.sm,
   },
   input: {
@@ -90,6 +148,13 @@ const styles = StyleSheet.create({
   },
   inputWithIcon: {
     paddingLeft: 0,
+  },
+  inputWithEye: {
+    paddingRight: spacing.xs,
+  },
+  eyeBtn: {
+    paddingLeft: spacing.sm,
+    paddingVertical: 6,
   },
   error: {
     fontSize: typography.fontSize.xs,

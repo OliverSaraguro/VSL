@@ -133,7 +133,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = () => {
 
       {entries.length === 0 ? (
         <EmptyState
-          icon="📋"
+          icon="history"
           title="Sin historial"
           message="No hay registros de viajes para mostrar aún."
         />

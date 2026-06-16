@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/config/theme';
 
 interface HeaderProps {
@@ -8,29 +10,38 @@ interface HeaderProps {
   rightAction?: React.ReactNode;
 }
 
-export const Header: React.FC<HeaderProps> = ({ title, onBack, rightAction }) => (
-  <View style={styles.container}>
-    <View style={styles.left}>
-      {onBack ? (
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.placeholder} />
-      )}
+export const Header: React.FC<HeaderProps> = ({ title, onBack, rightAction }) => {
+  const insets = useSafeAreaInsets();
+  const paddingTop = insets.top + (Platform.OS === 'android' ? 4 : 0);
+
+  return (
+    <View style={[styles.container, { paddingTop: paddingTop + spacing.sm }]}>
+      <View style={styles.left}>
+        {onBack ? (
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <MaterialIcons name="arrow-back-ios" size={19} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.placeholder} />
+        )}
+      </View>
+
+      <Text style={styles.title} numberOfLines={1}>
+        {title}
+      </Text>
+
+      <View style={styles.right}>
+        {rightAction ?? <View style={styles.placeholder} />}
+      </View>
     </View>
-    <Text style={styles.title} numberOfLines={1}>
-      {title}
-    </Text>
-    <View style={styles.right}>{rightAction ?? <View style={styles.placeholder} />}</View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -38,10 +49,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    paddingBottom: spacing.md,
+    backgroundColor: colors.primary,
+    borderBottomWidth: 0,
   },
   left: {
     width: 48,
@@ -52,25 +62,22 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backIcon: {
-    fontSize: 20,
-    color: colors.text,
   },
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: typography.h3.fontSize,
+    fontSize: 17,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
   placeholder: {
-    width: 40,
+    width: 38,
   },
 });

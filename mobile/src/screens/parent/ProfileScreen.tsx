@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Switch, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, Switch, StyleSheet, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
@@ -14,6 +15,7 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { logout } = useAuth();
   const [pushNotifications, setPushNotifications] = useState(true);
@@ -54,6 +56,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 4 : 0) + spacing.sm }]}>
+        <Text style={styles.pageTitle}>Perfil</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Avatar */}
         <View style={styles.avatarSection}>
@@ -131,11 +136,14 @@ function SettingRow({ label, value, onToggle, last = false }: { label: string; v
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md, backgroundColor: colors.primary },
+  pageTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
+  pageSub: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   scroll: { padding: spacing.xl, paddingBottom: 40 },
   avatarSection: { alignItems: 'center', marginBottom: spacing.xl },
   avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   avatarInitial: { fontSize: 32, fontWeight: '800', color: '#FFF' },
-  userName: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text },
+  userName: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text, textAlign: 'center' },
   userEmail: { fontSize: typography.body.fontSize, color: colors.textSecondary, marginTop: 2 },
   sectionTitle: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
   studentCard: { marginBottom: spacing.sm },

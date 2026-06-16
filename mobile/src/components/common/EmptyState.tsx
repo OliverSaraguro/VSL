@@ -1,10 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/config/theme';
 import { Button } from './Button';
 
+type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
+
 interface EmptyStateProps {
-  icon?: string;
+  icon?: MaterialIconName;
   title: string;
   message: string;
   actionLabel?: string;
@@ -12,14 +15,16 @@ interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  icon = '📭',
+  icon = 'inbox',
   title,
   message,
   actionLabel,
   onAction,
 }) => (
   <View style={styles.container} accessibilityLabel={`${title}. ${message}`}>
-    <Text style={styles.icon}>{icon}</Text>
+    <View style={styles.iconCircle}>
+      <MaterialIcons name={icon} size={48} color={colors.primaryLight} />
+    </View>
     <Text style={styles.title}>{title}</Text>
     <Text style={styles.message}>{message}</Text>
     {actionLabel && onAction ? (
@@ -35,9 +40,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
   },
-  icon: {
-    fontSize: 56,
-    marginBottom: spacing.md,
+  iconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
   title: {
     fontSize: typography.h3.fontSize,

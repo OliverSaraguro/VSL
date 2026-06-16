@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/config/theme';
 import type { Student } from '@/types';
 
@@ -25,7 +26,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({ student, boarded = fal
       )}
       {boarded && (
         <View style={styles.checkBadge}>
-          <Text style={styles.checkIcon}>✓</Text>
+          <MaterialIcons name="check" size={10} color="#FFFFFF" />
         </View>
       )}
     </View>
@@ -53,52 +54,47 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
   cardBoarded: {
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: colors.success,
   },
   avatarContainer: {
     position: 'relative',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E8F5E9',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.secondary,
   },
   checkBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.surface,
-  },
-  checkIcon: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
   },
   info: {
     flex: 1,
@@ -108,6 +104,7 @@ const styles = StyleSheet.create({
     fontSize: typography.body.fontSize,
     fontWeight: '600',
     color: colors.text,
+    letterSpacing: -0.2,
   },
   detail: {
     fontSize: typography.small.fontSize,
@@ -120,19 +117,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusBoarded: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#DCFCE7',
   },
   statusPending: {
-    backgroundColor: '#FFF8E1',
+    backgroundColor: '#FEF3C7',
   },
   statusText: {
     fontSize: typography.small.fontSize,
     fontWeight: '600',
   },
   statusTextBoarded: {
-    color: colors.success,
+    color: '#16A34A',
   },
   statusTextPending: {
-    color: '#F57F17',
+    color: '#B45309',
   },
 });

@@ -5,7 +5,10 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import { colors, typography, spacing } from '@/config/theme';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
@@ -22,6 +25,9 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  const route  = useRoute();
+  const isRoutesTab = route.name === 'RoutesList';
   const { user } = useAuthStore();
   const { todayRoute, fetchTodayRoute } = useRoutesStore();
   const [students, setStudents] = useState<Student[]>([]);
@@ -60,9 +66,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 4 : 0) + spacing.md }]}>
         <View>
-          <Text style={styles.greeting}>Hola, {user?.name?.split(' ')[0] ?? 'Conductor'}</Text>
+          <Text style={styles.greeting}>
+            {isRoutesTab ? 'Mis Rutas' : `Hola, ${user?.name?.split(' ')[0] ?? 'Conductor'}`}
+          </Text>
           <Text style={styles.date}>
             {new Date().toLocaleDateString('es-EC', {
               weekday: 'long',
@@ -105,7 +113,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
               onPress={() => navigation.navigate('RouteDetail', { routeId: todayRoute.id })}
             />
             <Button
-              title="🚌  Iniciar Ruta"
+              title="Iniciar Ruta"
               onPress={() => navigation.navigate('ActiveRoute', { routeId: todayRoute.id })}
               size="lg"
               style={styles.startButton}
@@ -113,7 +121,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           </>
         ) : (
           <EmptyState
-            icon="🛣️"
+            icon="route"
             title="Sin ruta programada"
             message="No tienes una ruta configurada para hoy."
             actionLabel="Crear ruta"
@@ -154,18 +162,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
     paddingBottom: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
   },
   greeting: {
     fontSize: typography.h2.fontSize,
     fontWeight: '800',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   date: {
     fontSize: typography.body.fontSize,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.75)',
     marginTop: 2,
     textTransform: 'capitalize',
   },

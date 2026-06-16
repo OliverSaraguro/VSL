@@ -1,8 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
-import { Text } from 'react-native';
-import { colors, typography } from '../config/theme';
+import { colors } from '../config/theme';
+import { buildCustomTabBar } from '../components/common/CustomTabBar';
 
 import { DashboardScreen } from '../screens/parent/DashboardScreen';
 import { TrackingScreen } from '../screens/parent/TrackingScreen';
@@ -11,91 +10,36 @@ import { ProfileScreen } from '../screens/parent/ProfileScreen';
 import { AbsenceScreen } from '../screens/parent/AbsenceScreen';
 
 export type ParentTabParamList = {
+  ParentTracking:  undefined;
+  ParentAbsence:   undefined;
   ParentDashboard: undefined;
-  ParentTracking: undefined;
-  ParentHistory: undefined;
-  ParentProfile: undefined;
+  ParentHistory:   undefined;
+  ParentProfile:   undefined;
 };
 
 const Tab = createBottomTabNavigator<ParentTabParamList>();
-const DashStack = createStackNavigator();
 
-function DashboardStack() {
-  return (
-    <DashStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: colors.textInverse,
-        headerTitleStyle: { fontWeight: typography.fontWeight.bold },
-      }}
-    >
-      <DashStack.Screen name="ParentDashboardHome" component={DashboardScreen} options={{ title: 'Inicio' }} />
-      <DashStack.Screen name="ParentAbsence" component={AbsenceScreen} options={{ headerShown: false }} />
-    </DashStack.Navigator>
-  );
-}
+const PARENT_TAB_CONFIG = {
+  ParentTracking:  { icon: 'location-on' as const, label: 'Rastreo' },
+  ParentAbsence:   { icon: 'event-busy'  as const, label: 'Ausencia' },
+  ParentDashboard: { icon: 'home'        as const, label: 'Inicio' },
+  ParentHistory:   { icon: 'history'     as const, label: 'Historial' },
+  ParentProfile:   { icon: 'person'      as const, label: 'Perfil' },
+};
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Inicio: '🏠',
-    Rastreo: '📍',
-    Historial: '📋',
-    Perfil: '👤',
-  };
-  return <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>{icons[label] || '📌'}</Text>;
-}
+const parentTabBar = buildCustomTabBar(PARENT_TAB_CONFIG);
 
 export default function ParentNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 65,
-          paddingBottom: 10,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: typography.fontSize.xs,
-          fontWeight: typography.fontWeight.medium,
-        },
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: colors.textInverse,
-        headerTitleStyle: { fontWeight: typography.fontWeight.bold },
-        tabBarIcon: ({ focused }) => {
-          const labels: Record<string, string> = {
-            ParentDashboard: 'Inicio',
-            ParentTracking: 'Rastreo',
-            ParentHistory: 'Historial',
-            ParentProfile: 'Perfil',
-          };
-          return <TabIcon label={labels[route.name] || ''} focused={focused} />;
-        },
-      })}
+      tabBar={parentTabBar}
+      screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen
-        name="ParentDashboard"
-        component={DashboardStack}
-        options={{ title: 'Inicio', tabBarLabel: 'Inicio', headerShown: false }}
-      />
-      <Tab.Screen
-        name="ParentTracking"
-        component={TrackingScreen}
-        options={{ title: 'Rastreo', tabBarLabel: 'Rastreo' }}
-      />
-      <Tab.Screen
-        name="ParentHistory"
-        component={HistoryScreen}
-        options={{ title: 'Historial', tabBarLabel: 'Historial' }}
-      />
-      <Tab.Screen
-        name="ParentProfile"
-        component={ProfileScreen}
-        options={{ title: 'Perfil', tabBarLabel: 'Perfil' }}
-      />
+      <Tab.Screen name="ParentTracking"  component={TrackingScreen} />
+      <Tab.Screen name="ParentAbsence"   component={AbsenceScreen} />
+      <Tab.Screen name="ParentDashboard" component={DashboardScreen} />
+      <Tab.Screen name="ParentHistory"   component={HistoryScreen} />
+      <Tab.Screen name="ParentProfile"   component={ProfileScreen} />
     </Tab.Navigator>
   );
 }

@@ -1,8 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Text } from 'react-native';
 import { colors, typography } from '../config/theme';
+import { buildCustomTabBar } from '../components/common/CustomTabBar';
 
 import { DashboardScreen } from '../screens/driver/DashboardScreen';
 import { StudentsScreen } from '../screens/driver/StudentsScreen';
@@ -14,115 +14,82 @@ import { ActiveRouteScreen } from '../screens/driver/ActiveRouteScreen';
 import { RouteDetailScreen } from '../screens/driver/RouteDetailScreen';
 
 export type DriverTabParamList = {
-  DriverDashboard: undefined;
   DriverRoutes: undefined;
   DriverStudents: undefined;
+  DriverDashboard: undefined;
   DriverPayments: undefined;
   DriverProfile: undefined;
 };
 
 const Tab = createBottomTabNavigator<DriverTabParamList>();
-const Stack = createStackNavigator();
+const RoutesStack = createStackNavigator();
 const StudentsStack = createStackNavigator();
 
-function RoutesStack() {
+const DRIVER_TAB_CONFIG = {
+  DriverRoutes:    { icon: 'map'      as const, label: 'Rutas' },
+  DriverStudents:  { icon: 'people'   as const, label: 'Estudiantes' },
+  DriverDashboard: { icon: 'home'     as const, label: 'Inicio' },
+  DriverPayments:  { icon: 'payments' as const, label: 'Pagos' },
+  DriverProfile:   { icon: 'person'   as const, label: 'Perfil' },
+};
+
+const driverTabBar = buildCustomTabBar(DRIVER_TAB_CONFIG);
+
+function RoutesStackNavigator() {
   return (
-    <Stack.Navigator
+    <RoutesStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: colors.primary },
         headerTintColor: colors.textInverse,
         headerTitleStyle: { fontWeight: typography.fontWeight.bold },
       }}
     >
-      <Stack.Screen name="RoutesList" component={DashboardScreen} options={{ title: 'Mis Rutas' }} />
-      <Stack.Screen name="CreateRoute" component={CreateRouteScreen as any} options={{ title: 'Nueva Ruta' }} />
-      <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} options={{ title: 'Ruta Activa', headerShown: false }} />
-      <Stack.Screen name="RouteDetail" component={RouteDetailScreen as any} options={{ title: 'Detalle de Ruta' }} />
-    </Stack.Navigator>
+      <RoutesStack.Screen
+        name="RoutesList"
+        component={DashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <RoutesStack.Screen
+        name="CreateRoute"
+        component={CreateRouteScreen as any}
+        options={{ headerShown: false }}
+      />
+      <RoutesStack.Screen
+        name="ActiveRoute"
+        component={ActiveRouteScreen}
+        options={{ headerShown: false }}
+      />
+      <RoutesStack.Screen
+        name="RouteDetail"
+        component={RouteDetailScreen as any}
+        options={{ headerShown: false }}
+      />
+    </RoutesStack.Navigator>
   );
 }
 
 function StudentsStackNavigator() {
   return (
-    <StudentsStack.Navigator
-      screenOptions={{
-        headerShown: false, // Desactivado porque los componentes de pantalla dibujan sus propios encabezados
-      }}
-    >
+    <StudentsStack.Navigator screenOptions={{ headerShown: false }}>
       <StudentsStack.Screen name="StudentsList" component={StudentsScreen} />
       <StudentsStack.Screen name="RegisterStudent" component={RegisterStudentScreen} />
     </StudentsStack.Navigator>
   );
 }
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Inicio: '🏠',
-    Rutas: '🗺️',
-    Estudiantes: '👦',
-    Pagos: '💰',
-    Perfil: '👤',
-  };
-  return <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>{icons[label] || '📌'}</Text>;
-}
-
 export default function DriverNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 65,
-          paddingBottom: 10,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: typography.fontSize.xs,
-          fontWeight: typography.fontWeight.medium,
-        },
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: colors.textInverse,
-        headerTitleStyle: { fontWeight: typography.fontWeight.bold },
-        tabBarIcon: ({ focused }) => {
-          const labels: Record<string, string> = {
-            DriverDashboard: 'Inicio',
-            DriverRoutes: 'Rutas',
-            DriverStudents: 'Estudiantes',
-            DriverPayments: 'Pagos',
-            DriverProfile: 'Perfil',
-          };
-          return <TabIcon label={labels[route.name] || ''} focused={focused} />;
-        },
-      })}
+      tabBar={driverTabBar}
+      screenOptions={{
+        headerShown: false,
+      }}
     >
-      <Tab.Screen
-        name="DriverDashboard"
-        component={DashboardScreen}
-        options={{ title: 'Inicio', tabBarLabel: 'Inicio' }}
-      />
-      <Tab.Screen
-        name="DriverRoutes"
-        component={RoutesStack}
-        options={{ title: 'Rutas', tabBarLabel: 'Rutas', headerShown: false }}
-      />
-      <Tab.Screen
-        name="DriverStudents"
-        component={StudentsStackNavigator}
-        options={{ title: 'Estudiantes', tabBarLabel: 'Estudiantes', headerShown: false }}
-      />
-      <Tab.Screen
-        name="DriverPayments"
-        component={PaymentsScreen}
-        options={{ title: 'Pagos', tabBarLabel: 'Pagos' }}
-      />
-      <Tab.Screen
-        name="DriverProfile"
-        component={ProfileScreen}
-        options={{ title: 'Perfil', tabBarLabel: 'Perfil' }}
-      />
+      <Tab.Screen name="DriverRoutes"    component={RoutesStackNavigator} />
+      <Tab.Screen name="DriverStudents"  component={StudentsStackNavigator} />
+      <Tab.Screen name="DriverDashboard" component={DashboardScreen} />
+      <Tab.Screen name="DriverPayments"  component={PaymentsScreen} />
+      <Tab.Screen name="DriverProfile"   component={ProfileScreen} />
     </Tab.Navigator>
   );
 }

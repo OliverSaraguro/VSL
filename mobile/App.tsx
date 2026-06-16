@@ -30,7 +30,7 @@ export default function App() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <NavigationContainer theme={navigationTheme}>
-          <StatusBar style="light" />
+          <StatusBar style="auto" backgroundColor="transparent" translucent />
           <AppNavigator />
         </NavigationContainer>
       </SafeAreaProvider>

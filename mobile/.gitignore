@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Variables de entorno (contienen credenciales)
+.env
+.env.local
+.env.*.local
+
+# iOS / Android builds
+*.ipa
+*.apk
+*.aab
+ios/
+android/

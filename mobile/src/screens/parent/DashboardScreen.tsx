@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
@@ -14,6 +16,7 @@ interface ParentDashboardProps {
 }
 
 export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -72,7 +75,7 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 4 : 0) + spacing.md }]}>
         <Text style={styles.greeting}>Hola, {user?.name?.split(' ')[0] ?? 'Padre'}</Text>
         <Text style={styles.subtitle}>Transporte de {studentName}</Text>
       </View>
@@ -86,9 +89,9 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
         <Card style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <Text style={styles.cardTitle}>Estado de la ruta</Text>
-            <View style={[styles.badge, { backgroundColor: routeActive ? '#E8F5E9' : '#F5F5F5' }]}>
-              <View style={[styles.badgeDot, { backgroundColor: routeActive ? colors.success : colors.statusFinished }]} />
-              <Text style={[styles.badgeText, { color: routeActive ? colors.success : colors.textSecondary }]}>
+            <View style={[styles.badge, { backgroundColor: routeActive ? '#EFF6FF' : colors.background }]}>
+              <View style={[styles.badgeDot, { backgroundColor: routeActive ? colors.secondary : colors.statusFinished }]} />
+              <Text style={[styles.badgeText, { color: routeActive ? colors.secondary : colors.textSecondary }]}>
                 {routeActive ? 'ACTIVA' : 'FINALIZADA'}
               </Text>
             </View>
@@ -107,7 +110,7 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
           </View>
 
           <Button
-            title="📍  Ver en mapa"
+            title="Ver en mapa"
             onPress={() => navigation.navigate('ParentTracking')}
             size="md"
             style={styles.trackButton}
@@ -132,14 +135,18 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
         {/* Acciones rápidas */}
         <Text style={styles.sectionTitle}>Acciones rápidas</Text>
         <View style={styles.actionsRow}>
-          <Card style={styles.actionCard}>
-            <Text style={{ fontSize: 28, marginBottom: 8 }}>📋</Text>
-            <Button title="Historial" onPress={() => navigation.navigate('ParentHistory')} variant="outline" size="sm" />
-          </Card>
-          <Card style={styles.actionCard}>
-            <Text style={{ fontSize: 28, marginBottom: 8 }}>🚫</Text>
-            <Button title="Ausencia" onPress={() => navigation.navigate('ParentAbsence')} variant="outline" size="sm" />
-          </Card>
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('ParentHistory')} activeOpacity={0.75}>
+            <View style={styles.actionIcon}>
+              <MaterialIcons name="history" size={28} color={colors.secondary} />
+            </View>
+            <Text style={styles.actionLabel}>Historial</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('ParentAbsence')} activeOpacity={0.75}>
+            <View style={styles.actionIcon}>
+              <MaterialIcons name="event-busy" size={28} color={colors.secondary} />
+            </View>
+            <Text style={styles.actionLabel}>Ausencia</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -148,9 +155,9 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.md, backgroundColor: colors.surface },
-  greeting: { fontSize: typography.h2.fontSize, fontWeight: '800', color: colors.text },
-  subtitle: { fontSize: typography.body.fontSize, color: colors.textSecondary, marginTop: 2 },
+  header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md, backgroundColor: colors.primary },
+  greeting: { fontSize: typography.h2.fontSize, fontWeight: '800', color: '#FFFFFF' },
+  subtitle: { fontSize: typography.body.fontSize, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   scroll: { padding: spacing.lg, paddingBottom: 32 },
   statusCard: { marginBottom: spacing.md },
   statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
@@ -172,5 +179,30 @@ const styles = StyleSheet.create({
   emptyNotif: { alignItems: 'center', padding: spacing.lg },
   emptyNotifText: { fontSize: typography.body.fontSize, color: colors.textSecondary },
   actionsRow: { flexDirection: 'row', gap: spacing.sm },
-  actionCard: { flex: 1, alignItems: 'center', padding: spacing.md },
+  actionCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  actionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  actionLabel: {
+    fontSize: typography.small.fontSize,
+    fontWeight: '600',
+    color: colors.text,
+  },
 });

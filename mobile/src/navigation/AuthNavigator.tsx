@@ -32,12 +32,12 @@ export default function AuthNavigator() {
       <Stack.Screen
         name="RegisterDriver"
         component={RegisterDriverScreen}
-        options={{ title: 'Registro Conductor' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="RegisterParent"
         component={RegisterParentScreen}
-        options={{ title: 'Registro Padre' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
