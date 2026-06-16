@@ -15,6 +15,7 @@ import { RouteCard } from '@/components/routes/RouteCard';
 import { StudentCard } from '@/components/students/StudentCard';
 import { useRoutesStore } from '@/store/routes.store';
 import { useAuthStore } from '@/store/auth.store';
+import studentsService from '@/servicios/students.service';
 import type { Student } from '@/types';
 
 interface DashboardScreenProps {
@@ -25,7 +26,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const { user } = useAuthStore();
   const { todayRoute, fetchTodayRoute } = useRoutesStore();
   const [students, setStudents] = useState<Student[]>([]);
-  const [absentCount] = useState(0);
+  const [absentIds, setAbsentIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -47,8 +48,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     if (todayRoute?.stops) {
       const routeStudents = todayRoute.stops.map((stop: any) => stop.student).filter(Boolean);
       setStudents(routeStudents);
+
+      // HU07: las ausencias registradas para hoy se muestran tachadas en el panel inicial.
+      const today = new Date().toISOString().split('T')[0];
+      studentsService
+        .getAbsentStudentIds(routeStudents.map((s: Student) => s.id), today)
+        .then(setAbsentIds)
+        .catch(() => setAbsentIds(new Set()));
     }
   }, [todayRoute]);
+
+  const absentCount = absentIds.size;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -126,7 +136,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           <>
             <Text style={styles.sectionTitle}>Estudiantes</Text>
             {students.slice(0, 5).map((s) => (
-              <StudentCard key={s.id} student={s} />
+              <StudentCard key={s.id} student={s} absent={absentIds.has(s.id)} />
             ))}
             {students.length > 5 && (
               <Button

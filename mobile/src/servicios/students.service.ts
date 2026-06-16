@@ -42,7 +42,19 @@ function mapStudent(db: any): Student {
     parentId: db.parent_id,
     isActive: db.is_active,
     createdAt: db.created_at,
+    invitationCode: db.invitation_code,
+    invitationCodeExpiresAt: db.invitation_code_expires_at,
   };
+}
+
+// Código corto y fácil de dictar/escribir por WhatsApp (sin caracteres ambiguos como 0/O o 1/I)
+function generateInvitationCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `VSL-${code.slice(0, 4)}-${code.slice(4)}`;
 }
 
 function mapAbsence(db: any): Absence {
@@ -86,7 +98,7 @@ class StudentsService {
     const driverId = getCurrentUserId();
     if (!driverId) throw new Error('Conductor no autenticado. Inicia sesión de nuevo.');
 
-    // 2. Intentar buscar el ID del padre si se ingresó un correo
+    // 2. Intentar buscar el ID del padre si se ingresó un correo de una cuenta YA registrada
     let parentId: string | null = null;
     if (payload.parentEmail && payload.parentEmail.trim()) {
       try {
@@ -108,7 +120,15 @@ class StudentsService {
       }
     }
 
-    // 3. Insertar en Supabase
+    // 3. Si todavía no hay un padre vinculado (lo más común: el padre aún no tiene cuenta),
+    // generamos un código de invitación válido por 48h para que el conductor se lo comparta
+    // por WhatsApp/SMS y el padre lo use al registrarse (HU02 / HU06).
+    const invitationCode = parentId ? null : generateInvitationCode();
+    const invitationCodeExpiresAt = parentId
+      ? null
+      : new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+
+    // 4. Insertar en Supabase
     const { data, error } = await withTimeout(
       supabase
         .from('students')
@@ -120,7 +140,9 @@ class StudentsService {
           longitude: payload.longitude ?? -79.20456,
           is_active: payload.isActive ?? true,
           driver_id: driverId, // Asignar el ID del conductor logueado
-          parent_id: parentId, // Vincular al padre si existía
+          parent_id: parentId, // Vincular al padre si ya tenía cuenta con ese correo
+          invitation_code: invitationCode,
+          invitation_code_expires_at: invitationCodeExpiresAt,
         })
         .select()
         .single(),
@@ -128,6 +150,41 @@ class StudentsService {
     );
 
     if (error) throw error;
+    return mapStudent(data);
+  }
+
+  // Regenera el código de invitación de un estudiante (p. ej. si el anterior expiró sin usarse)
+  async regenerateInvitationCode(studentId: string): Promise<Student> {
+    const invitationCode = generateInvitationCode();
+    const invitationCodeExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await withTimeout(
+      supabase
+        .from('students')
+        .update({
+          invitation_code: invitationCode,
+          invitation_code_expires_at: invitationCodeExpiresAt,
+        })
+        .eq('id', studentId)
+        .select()
+        .single(),
+      'generar nuevo código de invitación',
+    );
+
+    if (error) throw error;
+    return mapStudent(data);
+  }
+
+  // Vincula al padre autenticado con el estudiante dueño del código (HU02). Usa una función de
+  // Postgres con privilegios elevados porque el padre aún no tiene permiso de RLS para leer la
+  // fila del estudiante antes de quedar vinculado.
+  async redeemInvitationCode(code: string): Promise<Student> {
+    const { data, error } = await withTimeout(
+      supabase.rpc('redeem_invitation_code', { code: code.trim().toUpperCase() }),
+      'vincular código de invitación',
+    );
+
+    if (error) throw new Error(error.message);
     return mapStudent(data);
   }
 
@@ -241,6 +298,24 @@ class StudentsService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  // Devuelve el conjunto de IDs de estudiantes ausentes en una fecha dada (HU18: la parada del
+  // estudiante ausente se quita de la lista activa del conductor ese día).
+  async getAbsentStudentIds(studentIds: string[], date: string): Promise<Set<string>> {
+    if (studentIds.length === 0) return new Set();
+
+    const { data, error } = await withTimeout(
+      supabase
+        .from('absences')
+        .select('student_id')
+        .eq('date', date)
+        .in('student_id', studentIds),
+      'cargar ausencias del día',
+    );
+
+    if (error) throw error;
+    return new Set((data || []).map((row: any) => row.student_id as string));
   }
 
   async deleteAbsence(absenceId: string): Promise<void> {

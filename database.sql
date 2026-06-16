@@ -56,8 +56,16 @@ create table public.students (
   is_active boolean default true not null,
   driver_id uuid references public.drivers(id) not null,
   parent_id uuid references public.parents(id) on delete set null,
+  -- Código de invitación temporal (48h) que el conductor comparte con el representante para
+  -- vincularse a este estudiante en el registro (HU02/HU06). Se limpia al canjearse.
+  invitation_code text,
+  invitation_code_expires_at timestamptz,
   created_at timestamptz default now() not null
 );
+
+create unique index students_invitation_code_idx
+  on public.students (invitation_code)
+  where invitation_code is not null;
 
 -- Rutas
 create table public.routes (
@@ -198,6 +206,51 @@ create trigger on_user_updated
   before update on public.users
   for each row execute procedure public.handle_updated_at();
 
+-- Canje del código de invitación de un estudiante (HU02). Corre con privilegios elevados porque
+-- un padre recién registrado todavía no tiene permiso de RLS para leer la fila del estudiante.
+create or replace function public.redeem_invitation_code(code text)
+returns public.students
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_student public.students;
+begin
+  if auth.uid() is null then
+    raise exception 'Debes iniciar sesión para vincular un código de invitación.';
+  end if;
+
+  select * into v_student
+  from public.students
+  where invitation_code = upper(trim(code))
+  for update;
+
+  if v_student.id is null then
+    raise exception 'El código de invitación no es válido.';
+  end if;
+
+  if v_student.parent_id is not null then
+    raise exception 'Este código ya fue utilizado por otro representante.';
+  end if;
+
+  if v_student.invitation_code_expires_at is null or v_student.invitation_code_expires_at < now() then
+    raise exception 'El código de invitación expiró (válido por 48 horas). Pide uno nuevo al conductor.';
+  end if;
+
+  update public.students
+    set parent_id = auth.uid(),
+        invitation_code = null,
+        invitation_code_expires_at = null
+    where id = v_student.id
+    returning * into v_student;
+
+  return v_student;
+end;
+$$;
+
+grant execute on function public.redeem_invitation_code(text) to authenticated;
+
 -- =========================================================================
 -- 4. SEGURIDAD A NIVEL DE FILAS (ROW LEVEL SECURITY - RLS)
 
@@ -281,6 +334,18 @@ create policy "Gestión de pagos (conductores)" on public.payments for all using
 -- Políticas para notifications
 create policy "Ver notificaciones propias" on public.notifications for select using (auth.uid() = user_id);
 create policy "Actualizar lectura de notificaciones propias" on public.notifications for update using (auth.uid() = user_id);
+-- Un usuario puede crearse notificaciones a sí mismo (p. ej. recordatorio de pago) y un
+-- conductor puede crearle notificaciones al padre de SUS estudiantes (abordaje, llegada,
+-- desvío, retraso, mensajes, sustituto asignado).
+create policy "Crear notificaciones propias o como conductor del estudiante"
+  on public.notifications for insert
+  with check (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.students s
+      where s.parent_id = notifications.user_id and s.driver_id = auth.uid()
+    )
+  );
 
 -- Políticas para messages
 create policy "Lectura de mensajes de ruta" on public.messages for select using (

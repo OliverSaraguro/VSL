@@ -72,6 +72,23 @@ class PaymentsService {
     return (data || []).map(mapPayment);
   }
 
+  // Pagos pendientes de un estudiante cuya fecha de corte ya llegó o pasó (HU24: recordatorio al
+  // padre). La política de RLS de "payments" permite al padre leer los pagos de sus hijos.
+  async getOverduePendingForStudent(studentId: string): Promise<PaymentRecord[]> {
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await withTimeout(
+      supabase
+        .from('payments')
+        .select('*, student:students(id, name)')
+        .eq('student_id', studentId)
+        .eq('status', 'pending')
+        .lte('due_date', today),
+      'cargar pagos pendientes',
+    );
+    if (error) throw error;
+    return (data || []).map(mapPayment);
+  }
+
   async updateStatus(id: string, paid: boolean): Promise<void> {
     const { error } = await withTimeout(
       supabase

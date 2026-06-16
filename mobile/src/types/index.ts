@@ -62,6 +62,8 @@ export interface Student {
   parentId?: string;
   isActive: boolean;
   createdAt?: string;
+  invitationCode?: string | null;
+  invitationCodeExpiresAt?: string | null;
 }
 
 export interface Route {
