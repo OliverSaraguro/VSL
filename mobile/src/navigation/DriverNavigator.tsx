@@ -47,6 +47,7 @@ function RoutesStackNavigator() {
       }}
     >
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       <RoutesStack.Screen
         name="RoutesList"
         component={RoutesListScreen}
@@ -74,6 +75,8 @@ function RoutesStackNavigator() {
       />
     </RoutesStack.Navigator>
 =======
+=======
+>>>>>>> Stashed changes
       <Stack.Screen name="RoutesList" component={RoutesListScreen} options={{ title: 'Mis Rutas' }} />
       <Stack.Screen name="CreateRoute" component={CreateRouteScreen as any} options={{ title: 'Nueva Ruta' }} />
       <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} options={{ title: 'Ruta Activa', headerShown: false }} />

@@ -323,9 +323,12 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
   };
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   // ── Calendar ───────────────────────────────────────────────────────────────
   const cells = useMemo(() => getCalendarCells(year, month), [year, month]);
 =======
+=======
+>>>>>>> Stashed changes
   const openForm = () => {
     setFormStudentId(students[0]?.id ?? null);
     setFormAmount('');
@@ -608,6 +611,69 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
               <Text style={styles.clearDayText}>Ver todo el mes</Text>
             </TouchableOpacity>
 =======
+      <Button
+        title={showForm ? 'Cancelar' : '➕  Registrar Pago'}
+        onPress={() => (showForm ? setShowForm(false) : openForm())}
+        variant={showForm ? 'outline' : 'primary'}
+        size="md"
+        style={styles.registerButton}
+      />
+
+      {showForm && (
+        <Card style={styles.formCard}>
+          <Text style={styles.formLabel}>Estudiante</Text>
+          {students.length === 0 ? (
+            <Text style={styles.formEmpty}>No tienes estudiantes registrados todavía.</Text>
+          ) : (
+            <FlatList
+              horizontal
+              data={students}
+              keyExtractor={(s) => s.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.studentChips}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.studentChip, formStudentId === item.id && styles.studentChipActive]}
+                  onPress={() => setFormStudentId(item.id)}
+                >
+                  <Text style={[styles.studentChipText, formStudentId === item.id && styles.studentChipTextActive]}>
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+
+          <Text style={styles.formMonthHint}>Mes: {MONTHS[selectedMonth]} {new Date().getFullYear()}</Text>
+
+          <Input
+            label="Monto ($)"
+            placeholder="20.00"
+            value={formAmount}
+            onChangeText={setFormAmount}
+            keyboardType="decimal-pad"
+          />
+
+          <Text style={styles.formLabel}>Estado</Text>
+          <View style={styles.statusToggle}>
+            <TouchableOpacity
+              style={[styles.statusOption, formPaid && styles.statusOptionPaidActive]}
+              onPress={() => setFormPaid(true)}
+            >
+              <Text style={[styles.statusOptionText, formPaid && styles.statusOptionTextActive]}>✓ Cancelado</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.statusOption, !formPaid && styles.statusOptionPendingActive]}
+              onPress={() => setFormPaid(false)}
+            >
+              <Text style={[styles.statusOptionText, !formPaid && styles.statusOptionTextActive]}>Pendiente</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Button title="Guardar pago" onPress={handleSavePayment} loading={saving} size="lg" style={styles.saveButton} />
+        </Card>
+      )}
+
       <Button
         title={showForm ? 'Cancelar' : '➕  Registrar Pago'}
         onPress={() => (showForm ? setShowForm(false) : openForm())}
