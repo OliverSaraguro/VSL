@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import routesService from '@/servicios/routes.service';
 import studentsService from '@/servicios/students.service';
+import notificationsService from '@/servicios/notifications.service';
+import { distanceMeters } from '@/utils/geo';
 import { useLocation } from '@/hooks/useLocation';
 import { Student, Coordinates } from '@/types';
 
@@ -33,6 +35,7 @@ interface LocalStop {
   order: number;
   studentId: string;
   studentName: string;
+  parentId?: string;
   isNew: boolean;
 }
 
@@ -42,6 +45,38 @@ const DEFAULT_REGION = {
   latitudeDelta: 0.04,
   longitudeDelta: 0.04,
 };
+
+// HU04: mínimo 1, máximo 50 paradas por ruta.
+const MIN_STOPS = 1;
+const MAX_STOPS = 50;
+
+// HU04: el horario estimado de cada parada se calcula según la distancia real recorrida desde
+// la parada anterior (Haversine) a una velocidad promedio urbana, más un tiempo fijo de abordaje
+// por parada — en vez de una fórmula arbitraria basada solo en el número de orden.
+const AVG_SPEED_KMH = 25;
+const DWELL_MINUTES_PER_STOP = 1;
+const ROUTE_START_MINUTES = 6 * 60; // 06:00
+
+function formatClock(totalMinutesFromMidnight: number): string {
+  const mins = Math.round(totalMinutesFromMidnight);
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function computeEstimatedTimes(origin: Coordinates | null, orderedStops: LocalStop[]): string[] {
+  let elapsedMinutes = 0;
+  let prevPoint: Coordinates | null = origin;
+  return orderedStops.map((stop) => {
+    if (prevPoint) {
+      const meters = distanceMeters(prevPoint, stop);
+      elapsedMinutes += (meters / 1000 / AVG_SPEED_KMH) * 60;
+    }
+    elapsedMinutes += DWELL_MINUTES_PER_STOP;
+    prevPoint = stop;
+    return formatClock(ROUTE_START_MINUTES + elapsedMinutes);
+  });
+}
 
 export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation, route: navRoute }) => {
   const existingRouteId = navRoute?.params?.routeId;
@@ -62,6 +97,11 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
   const [loadingRoute, setLoadingRoute] = useState(isEditMode);
 
   const [loading, setLoading] = useState(false);
+  const [removedStopIds, setRemovedStopIds] = useState<string[]>([]);
+
+  // Padres a notificar al guardar (HU05): se acumulan los de cada estudiante agregado o quitado
+  // durante esta edición — no hace falta avisar a toda la ruta, solo a los afectados.
+  const affectedParentIdsRef = useRef<Set<string>>(new Set());
 
   const { location: origin, getCurrentLocation } = useLocation();
 
@@ -102,6 +142,7 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
             order: s.order,
             studentId: s.studentId || s.students?.[0]?.id || '',
             studentName: s.students?.[0]?.name || s.name,
+            parentId: s.students?.[0]?.parentId,
             isNew: false,
           })),
         );
@@ -124,12 +165,22 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
 
   const availableStudents = students.filter((st) => !stops.some((s) => s.studentId === st.id));
 
+  const sortedStops = useMemo(() => [...stops].sort((a, b) => a.order - b.order), [stops]);
+  const estimatedTimes = useMemo(
+    () => computeEstimatedTimes(origin, sortedStops),
+    [origin, sortedStops],
+  );
+
   const addStop = (student: Student) => {
     if (!student.latitude || !student.longitude) {
       Alert.alert(
         'Sin ubicación',
         `${student.name} no tiene una casa marcada en el mapa. Edita su registro para marcarla.`,
       );
+      return;
+    }
+    if (stops.length >= MAX_STOPS) {
+      Alert.alert('Límite de paradas', `Una ruta admite máximo ${MAX_STOPS} paradas.`);
       return;
     }
     const stop: LocalStop = {
@@ -140,15 +191,42 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
       order: stops.length + 1,
       studentId: student.id,
       studentName: student.name,
+      parentId: student.parentId,
       isNew: true,
     };
+    if (isEditMode && student.parentId) affectedParentIdsRef.current.add(student.parentId);
     setStops((prev) => [...prev, stop]);
   };
 
   const removeStop = (id: string) => {
-    setStops((prev) =>
-      prev.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i + 1 })),
-    );
+    setStops((prev) => {
+      const target = prev.find((s) => s.id === id);
+      if (target) {
+        if (!target.isNew) setRemovedStopIds((ids) => [...ids, target.id]);
+        if (isEditMode && target.parentId) affectedParentIdsRef.current.add(target.parentId);
+      }
+      return prev
+        .filter((s) => s.id !== id)
+        .sort((a, b) => a.order - b.order)
+        .map((s, i) => ({ ...s, order: i + 1 }));
+    });
+  };
+
+  // HU05: reordenar paradas con flechas (sin agregar una librería de drag & drop nueva).
+  const moveStop = (id: string, direction: 'up' | 'down') => {
+    setStops((prev) => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const idx = sorted.findIndex((s) => s.id === id);
+      const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+      if (idx === -1 || swapWith < 0 || swapWith >= sorted.length) return prev;
+      const orderA = sorted[idx].order;
+      const orderB = sorted[swapWith].order;
+      return sorted.map((s, i) => {
+        if (i === idx) return { ...s, order: orderB };
+        if (i === swapWith) return { ...s, order: orderA };
+        return s;
+      });
+    });
   };
 
   const handleCreate = async () => {
@@ -160,8 +238,13 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
       setDestinationError('Toca el mapa para marcar el destino final (ej. el colegio)');
       return;
     }
-    if (stops.length === 0) {
+    // HU04: entre 1 y 50 paradas.
+    if (sortedStops.length < MIN_STOPS) {
       Alert.alert('Atención', 'Agrega al menos un estudiante a la ruta.');
+      return;
+    }
+    if (sortedStops.length > MAX_STOPS) {
+      Alert.alert('Atención', `Una ruta admite máximo ${MAX_STOPS} paradas.`);
       return;
     }
 
@@ -179,21 +262,45 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
             })
           ).id;
 
-      const newStops = stops.filter((s) => s.isNew);
-      for (const stop of newStops) {
-        await routesService.addStop(routeId, {
-          studentId: stop.studentId,
-          order: stop.order,
-          address: stop.address,
-          latitude: stop.latitude,
-          longitude: stop.longitude,
-          estimatedTime: `${6 + Math.floor(stop.order * 0.15)}:${((stop.order * 10) % 60).toString().padStart(2, '0')}`,
-        });
+      // HU05: las paradas quitadas de una ruta existente se eliminan en el backend; el historial
+      // de abordajes no depende de la fila de `stops`, así que se conserva intacto.
+      for (const stopId of removedStopIds) {
+        await routesService.removeStop(routeId, stopId);
+      }
+
+      for (let i = 0; i < sortedStops.length; i++) {
+        const stop = sortedStops[i];
+        const estimatedTime = estimatedTimes[i];
+        if (stop.isNew) {
+          await routesService.addStop(routeId, {
+            studentId: stop.studentId,
+            order: stop.order,
+            address: stop.address,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+            estimatedTime,
+          });
+        } else if (isEditMode) {
+          // Reenvía orden + horario recalculado por si la parada se reordenó o cambió el inicio de ruta.
+          await routesService.updateStop(routeId, stop.id, { order: stop.order, estimatedTime });
+        }
+      }
+
+      // HU05: notifica a los padres de los estudiantes agregados o quitados en esta edición.
+      const affectedParentIds = Array.from(affectedParentIdsRef.current);
+      if (isEditMode && affectedParentIds.length > 0) {
+        await notificationsService.createMany(
+          affectedParentIds,
+          'Tu ruta fue actualizada',
+          `El conductor actualizó la ruta "${name.trim()}". Revisa el panel de paradas para ver los cambios.`,
+          'route_updated',
+          { routeId },
+        ).catch(() => {});
       }
 
       Alert.alert(
         isEditMode ? 'Ruta actualizada' : 'Ruta creada',
-        isEditMode ? 'Se agregaron los nuevos estudiantes a la ruta.' : 'La ruta y sus paradas han sido guardadas.',
+        isEditMode ? 'Los cambios de la ruta fueron guardados.' : 'La ruta y sus paradas han sido guardadas.',
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     } catch (err: any) {
@@ -205,7 +312,7 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
 
   const polylineCoords: Coordinates[] = [
     ...(origin ? [origin] : []),
-    ...stops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
+    ...sortedStops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
     ...(destinationCoords ? [destinationCoords] : []),
   ];
 
@@ -219,7 +326,7 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
 
   return (
     <View style={styles.container}>
-      <Header title={isEditMode ? 'Agregar estudiantes' : 'Crear Ruta'} onBack={() => navigation.goBack()} />
+      <Header title={isEditMode ? 'Editar Ruta' : 'Crear Ruta'} onBack={() => navigation.goBack()} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -247,7 +354,7 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
               onPress={handleMapPress}
             >
               {origin && <Marker coordinate={origin} title="Tu ubicación" pinColor={colors.secondary} />}
-              {stops.map((s) => (
+              {sortedStops.map((s) => (
                 <Marker
                   key={s.id}
                   coordinate={{ latitude: s.latitude, longitude: s.longitude }}
@@ -272,7 +379,7 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
           />
           {!!destinationError && <Text style={styles.errorText}>{destinationError}</Text>}
 
-          <Text style={styles.sectionTitle}>Agregar estudiantes ({stops.length} en la ruta)</Text>
+          <Text style={styles.sectionTitle}>Agregar estudiantes ({stops.length}/{MAX_STOPS} en la ruta)</Text>
           {loadingStudents ? (
             <Text style={styles.loadingText}>Cargando estudiantes...</Text>
           ) : availableStudents.length === 0 ? (
@@ -290,12 +397,12 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
           )}
 
           <Text style={styles.sectionTitle}>Orden de paradas</Text>
-          {stops.length === 0 ? (
+          {sortedStops.length === 0 ? (
             <Card style={styles.emptyCard}>
               <Text style={styles.emptyText}>Aún no has agregado estudiantes a esta ruta.</Text>
             </Card>
           ) : (
-            stops.map((stop) => (
+            sortedStops.map((stop, index) => (
               <Card key={stop.id} style={styles.stopCard}>
                 <View style={styles.stopHeader}>
                   <View style={styles.orderBadge}>
@@ -304,19 +411,34 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
                   <View style={styles.stopTextContainer}>
                     <Text style={styles.stopStudent}>👦 {stop.studentName}</Text>
                     <Text style={styles.stopAddress} numberOfLines={2}>{stop.address}</Text>
+                    <Text style={styles.stopTime}>🕐 Estimado: {estimatedTimes[index]}</Text>
                   </View>
                 </View>
-                {stop.isNew && (
+                <View style={styles.stopActions}>
+                  <TouchableOpacity
+                    onPress={() => moveStop(stop.id, 'up')}
+                    disabled={index === 0}
+                    style={[styles.reorderBtn, index === 0 && styles.reorderBtnDisabled]}
+                  >
+                    <Text style={styles.reorderText}>▲</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => moveStop(stop.id, 'down')}
+                    disabled={index === sortedStops.length - 1}
+                    style={[styles.reorderBtn, index === sortedStops.length - 1 && styles.reorderBtnDisabled]}
+                  >
+                    <Text style={styles.reorderText}>▼</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => removeStop(stop.id)} style={styles.removeBtn}>
                     <Text style={styles.removeText}>✕</Text>
                   </TouchableOpacity>
-                )}
+                </View>
               </Card>
             ))
           )}
 
           <Button
-            title={isEditMode ? 'Guardar nuevos estudiantes' : 'Guardar Ruta'}
+            title={isEditMode ? 'Guardar cambios' : 'Guardar Ruta'}
             onPress={handleCreate}
             loading={loading}
             size="lg"
@@ -405,6 +527,18 @@ const styles = StyleSheet.create({
   stopTextContainer: { flex: 1 },
   stopStudent: { fontSize: 12, fontWeight: '700', color: colors.primary },
   stopAddress: { fontSize: typography.body.fontSize, color: colors.text, marginTop: 2 },
+  stopTime: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  stopActions: { flexDirection: 'row', gap: 6, marginLeft: spacing.sm },
+  reorderBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reorderBtnDisabled: { opacity: 0.35 },
+  reorderText: { fontSize: 12, color: colors.secondary, fontWeight: '700' },
   removeBtn: {
     width: 32,
     height: 32,

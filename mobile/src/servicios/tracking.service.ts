@@ -44,10 +44,14 @@ class TrackingService {
 
     this.disconnect();
 
-    // Crear un canal en tiempo real específico para este viaje
+    // Crear un canal en tiempo real específico para este viaje. `private: true` activa la
+    // "Realtime Authorization" de Supabase: solo se transmite/recibe si el usuario autenticado
+    // pasa las políticas RLS de `realtime.messages` definidas en migration_route_tracking_rls.sql
+    // (HU29 — sin esto, cualquiera que conozca el tripId podría suscribirse al GPS en vivo).
     this.channel = supabase.channel(`trip:${tripId}`, {
       config: {
         broadcast: { self: true },
+        private: true,
       },
     });
 
@@ -106,6 +110,19 @@ class TrackingService {
       type: 'broadcast',
       event: 'location_update',
       payload: update,
+    });
+
+    // HU09: además del broadcast en vivo (efímero), persiste un ping liviano para que el
+    // trigger de Postgres pueda calcular el ETA a la siguiente parada y avisar por push real
+    // cuando esté a ≤5 min — sin esto no hay ningún dato en el servidor para evaluar la
+    // proximidad mientras la app del padre está cerrada. No se espera la respuesta para no
+    // demorar el ciclo de envío de ubicación.
+    supabase.from('trip_locations').insert({
+      trip_id: update.tripId,
+      latitude: update.coordinates.latitude,
+      longitude: update.coordinates.longitude,
+    }).then(({ error }) => {
+      if (error) console.warn('[tracking] No se pudo registrar ping GPS:', error.message);
     });
   }
 

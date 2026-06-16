@@ -8,9 +8,11 @@ interface StatusBadgeProps {
   status: RouteStatus;
 }
 
+// HU10: tres estados claramente diferenciados por color — ACTIVA en verde, EN_PAUSA en amarillo,
+// FINALIZADA en gris — para que el padre distinga de un vistazo el estado del recorrido.
 const statusConfig: Record<RouteStatus, { label: string; bg: string; text: string }> = {
-  ACTIVA: { label: 'Activa', bg: '#EFF6FF', text: colors.secondary },
-  EN_PAUSA: { label: 'En pausa', bg: '#FFFBEB', text: '#B45309' },
+  ACTIVA: { label: 'Activa', bg: '#DCFCE7', text: colors.statusActive },
+  EN_PAUSA: { label: 'En pausa', bg: '#FFFBEB', text: colors.statusPaused },
   FINALIZADA: { label: 'Finalizada', bg: '#F1F5F9', text: colors.statusFinished },
 };
 

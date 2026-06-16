@@ -45,25 +45,52 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = () => {
         }
 
         const studentId = students[0].id;
+        const since = new Date();
+        since.setDate(since.getDate() - 90);
+        const sinceDate = since.toISOString().split('T')[0];
 
-        const { data: boardings, error } = await supabase
-          .from('boardings')
-          .select('id, boarded_at, student_id, trip:trips(started_at, finished_at, status)')
-          .eq('student_id', studentId)
-          .order('boarded_at', { ascending: false })
-          .limit(90);
+        // HU19: el historial de 90 días debe incluir tanto los abordajes como las ausencias
+        // registradas por el padre — antes solo se consultaban los abordajes.
+        const [{ data: boardings, error: boardingsError }, { data: absences, error: absencesError }] =
+          await Promise.all([
+            supabase
+              .from('boardings')
+              .select('id, boarded_at, student_id, trip:trips(started_at, finished_at, status)')
+              .eq('student_id', studentId)
+              .order('boarded_at', { ascending: false })
+              .limit(90),
+            supabase
+              .from('absences')
+              .select('id, date, reason')
+              .eq('student_id', studentId)
+              .gte('date', sinceDate)
+              .order('date', { ascending: false }),
+          ]);
 
-        if (error) throw error;
+        if (boardingsError) throw boardingsError;
+        if (absencesError) throw absencesError;
 
-        const mapped: HistoryEntry[] = (boardings || []).map((b: any) => ({
-          id: b.id,
+        const boardedEntries: HistoryEntry[] = (boardings || []).map((b: any) => ({
+          id: `boarding-${b.id}`,
           date: b.boarded_at ? b.boarded_at.split('T')[0] : '',
           boardingTime: formatTime(b.boarded_at),
           arrivalTime: formatTime(b.trip?.finished_at),
           status: 'completed',
         }));
 
-        setEntries(mapped);
+        const absentEntries: HistoryEntry[] = (absences || []).map((a: any) => ({
+          id: `absence-${a.id}`,
+          date: a.date,
+          boardingTime: '—',
+          arrivalTime: '—',
+          status: 'absent',
+        }));
+
+        const merged = [...boardedEntries, ...absentEntries].sort((a, b) =>
+          b.date.localeCompare(a.date),
+        );
+
+        setEntries(merged);
       } catch {
         setEntries([]);
       } finally {

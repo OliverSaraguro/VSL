@@ -92,6 +92,37 @@ class PaymentsService {
     return (data || []).map(mapPayment);
   }
 
+  // Crea el registro de la mensualidad de un estudiante si no existía, o lo actualiza si ya
+  // existía para ese mes/año (gracias al unique constraint de la tabla). Esto es lo que permite
+  // un botón simple de "Registrar Pago": elegir estudiante, mes y si ya canceló o no.
+  async upsert(payload: {
+    studentId: string;
+    driverId: string;
+    month: number;
+    year: number;
+    amount: number;
+    status: 'PAID' | 'PENDING';
+  }): Promise<void> {
+    const dueDate = `${payload.year}-${String(payload.month).padStart(2, '0')}-05`;
+    const { error } = await withTimeout(
+      supabase.from('payments').upsert(
+        {
+          student_id: payload.studentId,
+          driver_id: payload.driverId,
+          month: payload.month,
+          year: payload.year,
+          amount: payload.amount,
+          status: payload.status === 'PAID' ? 'paid' : 'pending',
+          paid_at: payload.status === 'PAID' ? new Date().toISOString() : null,
+          due_date: dueDate,
+        },
+        { onConflict: 'student_id,driver_id,month,year' },
+      ),
+      'registrar pago',
+    );
+    if (error) throw error;
+  }
+
   async updateStatus(id: string, paid: boolean): Promise<void> {
     const { error } = await withTimeout(
       supabase

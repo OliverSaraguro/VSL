@@ -5,10 +5,16 @@ import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
+import { EditableAvatar } from '@/components/common/EditableAvatar';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuth } from '@/hooks/useAuth';
 import studentsService from '@/servicios/students.service';
 import { supabase } from '@/config/supabase';
+import {
+  loadNotificationPreferences,
+  saveNotificationPreferences,
+  NotificationPreferences,
+} from '@/config/notificationPreferences';
 import type { Student } from '@/types';
 
 interface ProfileScreenProps {
@@ -23,6 +29,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   const [boardingAlerts, setBoardingAlerts] = useState(true);
   const [arrivalAlerts, setArrivalAlerts] = useState(true);
   const [deviationAlerts, setDeviationAlerts] = useState(true);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [myStudents, setMyStudents] = useState<Student[]>([]);
   const [driverName, setDriverName] = useState('—');
   const [linkCode, setLinkCode] = useState('');
@@ -48,6 +55,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   };
 
   useEffect(() => { loadStudents(); }, []);
+
+  // HU31: carga las preferencias de notificación guardadas en este dispositivo.
+  useEffect(() => {
+    loadNotificationPreferences().then((prefs) => {
+      setPushNotifications(prefs.push);
+      setBoardingAlerts(prefs.boarding);
+      setArrivalAlerts(prefs.arrival);
+      setDeviationAlerts(prefs.deviation);
+      setPrefsLoaded(true);
+    });
+  }, []);
+
+  // Persiste cualquier cambio de preferencia ni bien el usuario lo toca (no antes de cargar,
+  // para no sobrescribir lo guardado con los valores iniciales por defecto).
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    const prefs: NotificationPreferences = {
+      push: pushNotifications,
+      boarding: boardingAlerts,
+      arrival: arrivalAlerts,
+      deviation: deviationAlerts,
+    };
+    saveNotificationPreferences(prefs);
+  }, [prefsLoaded, pushNotifications, boardingAlerts, arrivalAlerts, deviationAlerts]);
 
   const handleLinkCode = async () => {
     if (!linkCode.trim()) return;
@@ -79,11 +110,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Avatar */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitial}>
-              {user?.name?.charAt(0).toUpperCase() ?? 'P'}
-            </Text>
-          </View>
+          {user && <EditableAvatar userId={user.id} photoUrl={user.photoUrl} name={user.name} size={80} />}
           <Text style={styles.userName}>{user?.name ?? 'Padre/Madre'}</Text>
           <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
         </View>
@@ -141,9 +168,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
         <Text style={styles.sectionTitle}>Notificaciones</Text>
         <Card>
           <SettingRow label="Notificaciones push" value={pushNotifications} onToggle={setPushNotifications} />
-          <SettingRow label="Alerta de abordaje" value={boardingAlerts} onToggle={setBoardingAlerts} />
-          <SettingRow label="Alerta de llegada" value={arrivalAlerts} onToggle={setArrivalAlerts} />
-          <SettingRow label="Alerta de desvío" value={deviationAlerts} onToggle={setDeviationAlerts} last />
+          <SettingRow label="Alerta de abordaje" value={boardingAlerts} onToggle={setBoardingAlerts} disabled={!pushNotifications} />
+          <SettingRow label="Alerta de llegada" value={arrivalAlerts} onToggle={setArrivalAlerts} disabled={!pushNotifications} />
+          <SettingRow label="Alerta de desvío" value={deviationAlerts} onToggle={setDeviationAlerts} disabled={!pushNotifications} last />
         </Card>
 
         {/* Cerrar sesión */}
@@ -159,13 +186,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   );
 };
 
-function SettingRow({ label, value, onToggle, last = false }: { label: string; value: boolean; onToggle: (v: boolean) => void; last?: boolean }) {
+function SettingRow({
+  label, value, onToggle, last = false, disabled = false,
+}: { label: string; value: boolean; onToggle: (v: boolean) => void; last?: boolean; disabled?: boolean }) {
   return (
     <View style={[styles.settingRow, !last && styles.settingBorder]}>
-      <Text style={styles.settingLabel}>{label}</Text>
+      <Text style={[styles.settingLabel, disabled && styles.settingLabelDisabled]}>{label}</Text>
       <Switch
         value={value}
         onValueChange={onToggle}
+        disabled={disabled}
         trackColor={{ true: colors.primary, false: '#E0E0E0' }}
         thumbColor="#FFF"
       />
@@ -197,5 +227,6 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md },
   settingBorder: { borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   settingLabel: { fontSize: typography.body.fontSize, color: colors.text },
+  settingLabelDisabled: { color: colors.disabled },
   logoutButton: { marginTop: spacing.xxl },
 });

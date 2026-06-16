@@ -282,6 +282,12 @@ export const RouteDetailScreen: React.FC<RouteDetailScreenProps> = ({
             size="lg"
           />
           <Button
+            title="💬  Ver mensajes enviados"
+            onPress={() => navigation.navigate('MessageHistory', { routeId })}
+            variant="outline"
+            size="lg"
+          />
+          <Button
             title="🚌  Iniciar Ruta"
             onPress={() => navigation.navigate('ActiveRoute', { routeId })}
             size="lg"

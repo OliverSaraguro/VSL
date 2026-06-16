@@ -3,7 +3,14 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserRole } from '../types';
 import authService from '../servicios/auth.service';
+import notificationsService from '../servicios/notifications.service';
 import { supabase } from '../config/supabase';
+
+// HU09/HU14/HU15/...: registra el push token apenas hay sesión, sin bloquear ni romper el login
+// si el usuario rechaza el permiso o no hay push remoto disponible (p.ej. en Expo Go).
+function registerPushTokenSilently() {
+  notificationsService.registerPushToken().catch(() => {});
+}
 
 interface AuthState {
   user: User | null;
@@ -17,6 +24,7 @@ interface AuthState {
   loadProfile: () => Promise<void>;
   setHydrated: () => void;
   syncSession: () => Promise<void>;
+  setPhotoUrl: (photoUrl: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -70,6 +78,14 @@ export const useAuthStore = create<AuthState>()(
 
       setHydrated: () => set({ isHydrated: true }),
 
+      // Refleja la nueva foto de perfil de inmediato en toda la app (el guardado en Supabase ya
+      // se hizo antes de llamar a esto, ver authService.updatePhoto).
+      setPhotoUrl: (photoUrl) => {
+        const { user } = get();
+        if (!user) return;
+        set({ user: { ...user, photoUrl } });
+      },
+
       syncSession: async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
@@ -96,6 +112,7 @@ export const useAuthStore = create<AuthState>()(
                 token: session.access_token,
                 isAuthenticated: true,
               });
+              registerPushTokenSilently();
             }
           } catch {
             // Ignorar errores al recuperar perfil para no interrumpir
@@ -155,6 +172,7 @@ supabase.auth.onAuthStateChange((event, session) => {
               isAuthenticated: true,
               isLoading: false,
             });
+            registerPushTokenSilently();
           }
         } catch {
           // En caso de error, mantener lo que haya o esperar reintentar

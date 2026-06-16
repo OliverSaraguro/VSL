@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
+import { EditableAvatar } from '@/components/common/EditableAvatar';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/config/supabase';
@@ -42,21 +43,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   });
 
   React.useEffect(() => {
+    // Los datos del vehículo se guardan en public.drivers al registrarse (ver
+    // auth.service.ts -> registerDriver), no en los metadatos de Supabase Auth: por eso antes
+    // siempre se veían en "—" aquí.
     const loadMeta = async () => {
+      if (!user?.id) return;
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) return;
-        const meta = authUser.user_metadata || {};
-        setDriverMeta({
-          plateNumber: meta.licensePlate || '—',
-          vehicleModel: meta.vehicleModel || '—',
-          vehicleColor: meta.vehicleColor || '—',
-          licenseNumber: meta.licenseNumber || '—',
-        });
+        const { data, error } = await supabase
+          .from('drivers')
+          .select('plate_number, vehicle_model, vehicle_color, license_number')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) {
+          setDriverMeta({
+            plateNumber: data.plate_number || '—',
+            vehicleModel: data.vehicle_model || '—',
+            vehicleColor: data.vehicle_color || '—',
+            licenseNumber: data.license_number || '—',
+          });
+        }
       } catch {}
     };
     loadMeta();
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     AsyncStorage.getItem(LOW_POWER_MODE_KEY).then((value) => setLowPowerMode(value === 'true'));
@@ -82,11 +92,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Avatar */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitial}>
-              {user?.name?.charAt(0).toUpperCase() ?? 'C'}
-            </Text>
-          </View>
+          {user && <EditableAvatar userId={user.id} photoUrl={user.photoUrl} name={user.name} size={80} />}
           <Text style={styles.userName}>{user?.name ?? 'Conductor'}</Text>
           <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
         </View>

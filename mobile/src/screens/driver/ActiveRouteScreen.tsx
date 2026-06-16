@@ -14,6 +14,7 @@ import { colors, typography, spacing } from '@/config/theme';
 import { Button } from '@/components/common/Button';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Card } from '@/components/common/Card';
+import { BoardingButton } from '@/components/students/BoardingButton';
 import routesService from '@/servicios/routes.service';
 import trackingService from '@/servicios/tracking.service';
 import studentsService from '@/servicios/students.service';
@@ -24,6 +25,7 @@ import { useLocation } from '@/hooks/useLocation';
 import { useAuthStore } from '@/store/auth.store';
 import { distanceToRouteMeters } from '@/utils/geo';
 import { LOW_POWER_MODE_KEY } from '@/config/lowPowerMode';
+import { TripStatus } from '@/types';
 import type { Stop, Trip } from '@/types';
 
 const QUICK_MESSAGES = [
@@ -66,6 +68,7 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
   const [absentCount, setAbsentCount] = useState(0);
   const [loadingInit, setLoadingInit] = useState(true);
   const [finishing, setFinishing] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
   const [lowPower, setLowPower] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [trafficAlerts, setTrafficAlerts] = useState<TrafficAlert[]>([]);
@@ -235,6 +238,37 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
     }
   };
 
+  // HU10: el conductor puede pausar/reanudar el recorrido; el estado se refleja en el StatusBadge
+  // y se notifica a los padres de la ruta en cada cambio.
+  const togglePause = async () => {
+    if (!activeTrip || togglingPause) return;
+    const pausing = activeTrip.status !== TripStatus.PAUSED;
+    setTogglingPause(true);
+    try {
+      const updated = pausing
+        ? await routesService.pauseTrip(activeTrip.id)
+        : await routesService.resumeTrip(activeTrip.id);
+      setActiveTrip(updated);
+
+      if (pausing) stopTracking(); else startTracking();
+
+      const parentIds = Array.from(new Set(stops.map(getParentId).filter(Boolean) as string[]));
+      await notificationsService.createMany(
+        parentIds,
+        pausing ? 'La ruta está en pausa' : 'La ruta se reanudó',
+        pausing
+          ? 'El conductor pausó temporalmente el recorrido.'
+          : 'El conductor reanudó el recorrido.',
+        'route_updated',
+        { tripId: activeTrip.id },
+      ).catch(() => {});
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo cambiar el estado de la ruta.');
+    } finally {
+      setTogglingPause(false);
+    }
+  };
+
   const sendQuickMessage = async (message: string) => {
     if (!activeTrip || !routeId || !user) return;
     try {
@@ -343,12 +377,24 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <StatusBadge status="ACTIVA" />
+          <StatusBadge status={activeTrip?.status === TripStatus.PAUSED ? 'EN_PAUSA' : 'ACTIVA'} />
           <Text style={styles.headerTitle}>Ruta en curso</Text>
         </View>
-        <Text style={styles.counter}>
-          {boardedCount}/{totalStudents}
-        </Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.counter}>
+            {boardedCount}/{totalStudents}
+          </Text>
+          <TouchableOpacity
+            style={styles.pauseBtn}
+            onPress={togglePause}
+            disabled={togglingPause}
+            accessibilityLabel={activeTrip?.status === TripStatus.PAUSED ? 'Reanudar ruta' : 'Pausar ruta'}
+          >
+            <Text style={styles.pauseBtnText}>
+              {activeTrip?.status === TripStatus.PAUSED ? '▶ Reanudar' : '⏸ Pausar'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {absentCount > 0 && (
@@ -383,6 +429,14 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
       {/* Panel inferior */}
       <ScrollView style={styles.panel} showsVerticalScrollIndicator={false}>
         {/* Mensajes rápidos */}
+        <View style={styles.quickMessagesHeader}>
+          <Text style={styles.sectionTitle}>Mensajes</Text>
+          {routeId && (
+            <TouchableOpacity onPress={() => navigation.navigate('MessageHistory', { routeId })}>
+              <Text style={styles.quickMessagesHistoryLink}>Ver historial</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.quickMessages}>
           {QUICK_MESSAGES.map((qm) => (
             <TouchableOpacity
@@ -418,15 +472,12 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
                     {stop.estimatedTime} · {stop.address}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={[styles.boardBtn, boarded && styles.boardBtnActive]}
+                <BoardingButton
+                  studentName={studentName}
+                  boarded={boarded}
                   onPress={() => handleBoarding(stop)}
                   disabled={!studentId}
-                >
-                  <Text style={[styles.boardBtnText, boarded && styles.boardBtnTextActive]}>
-                    {boarded ? '✓ Abordó' : 'Registrar'}
-                  </Text>
-                </TouchableOpacity>
+                />
               </Card>
             );
           })
@@ -464,7 +515,17 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   headerTitle: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   counter: { fontSize: typography.h2.fontSize, fontWeight: '800', color: colors.primary },
+  pauseBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: colors.statusPaused,
+  },
+  pauseBtnText: { fontSize: 12, fontWeight: '700', color: colors.statusPaused },
   absentBanner: { backgroundColor: '#FFF3E0', paddingVertical: 6, paddingHorizontal: spacing.lg },
   absentBannerText: { fontSize: typography.small.fontSize, color: '#E65100', fontWeight: '600' },
   trafficBanner: { backgroundColor: '#FFEBEE', paddingVertical: 6, paddingHorizontal: spacing.lg },
@@ -479,7 +540,9 @@ const styles = StyleSheet.create({
   mapText: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text, marginTop: spacing.sm },
   mapSubtext: { fontSize: typography.small.fontSize, color: colors.textSecondary },
   panel: { flex: 1, paddingHorizontal: spacing.lg },
-  quickMessages: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.md },
+  quickMessagesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm },
+  quickMessagesHistoryLink: { fontSize: 12, fontWeight: '600', color: colors.secondary },
+  quickMessages: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm },
   quickMessageBtn: {
     flex: 1,
     paddingVertical: 10,
@@ -506,9 +569,5 @@ const styles = StyleSheet.create({
   boardingInfo: { flex: 1, marginRight: spacing.md },
   boardingName: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },
   boardingTime: { fontSize: typography.small.fontSize, color: colors.textSecondary, marginTop: 2 },
-  boardBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0' },
-  boardBtnActive: { backgroundColor: '#E8F5E9', borderColor: colors.success },
-  boardBtnText: { fontSize: typography.small.fontSize, fontWeight: '600', color: colors.textSecondary },
-  boardBtnTextActive: { color: colors.success },
   finishButton: { marginTop: spacing.xl, marginBottom: 32 },
 });

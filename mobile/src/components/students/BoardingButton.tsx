@@ -18,11 +18,11 @@ export const BoardingButton: React.FC<BoardingButtonProps> = ({
   <TouchableOpacity
     style={[styles.button, boarded ? styles.boarded : styles.pending, disabled && styles.disabled]}
     onPress={onPress}
-    disabled={disabled || boarded}
+    disabled={disabled}
     activeOpacity={0.7}
     accessibilityRole="button"
-    accessibilityLabel={`Registrar abordaje de ${studentName}`}
-    accessibilityState={{ disabled: disabled || boarded }}
+    accessibilityLabel={boarded ? `Quitar abordaje de ${studentName}` : `Registrar abordaje de ${studentName}`}
+    accessibilityState={{ disabled }}
   >
     <Text style={styles.icon}>{boarded ? '✓' : '🚌'}</Text>
     <Text style={[styles.label, boarded && styles.labelBoarded]}>

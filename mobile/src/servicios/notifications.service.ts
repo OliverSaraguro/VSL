@@ -161,6 +161,11 @@ class NotificationsService {
     return count || 0;
   }
 
+  // HU09/HU14/HU15/HU16/HU24/HU05/HU26: guarda el push token de Expo en `public.users` (no en
+  // metadata de auth) porque el trigger de Postgres que reenvía cada notificación como push real
+  // (ver migration_push_notifications.sql) necesita poder consultarlo con una query SQL normal.
+  // En Expo Go (sin development build) `getExpoPushTokenAsync` no entrega push remoto real — esto
+  // queda listo para cuando se genere un development/production build con EAS.
   async registerPushToken(): Promise<void> {
     const ExpoNotifications: typeof import('expo-notifications') = require('expo-notifications');
 
@@ -174,15 +179,15 @@ class NotificationsService {
 
     if (finalStatus !== 'granted') return;
 
+    const userId = getCurrentUserId();
+    if (!userId) return;
+
     const tokenData = await ExpoNotifications.getExpoPushTokenAsync();
 
-    // Guardar el token en los metadatos de Supabase Auth
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        pushToken: tokenData.data,
-        devicePlatform: Platform.OS,
-      },
-    });
+    const { error } = await supabase
+      .from('users')
+      .update({ push_token: tokenData.data, push_token_platform: Platform.OS })
+      .eq('id', userId);
 
     if (error) {
       console.warn('No se pudo registrar el token push en Supabase:', error.message);

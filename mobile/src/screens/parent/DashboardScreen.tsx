@@ -11,27 +11,46 @@ import notificationsService from '@/servicios/notifications.service';
 import studentsService from '@/servicios/students.service';
 import paymentsService from '@/servicios/payments.service';
 import { supabase } from '@/config/supabase';
+import { loadNotificationPreferences, isNotificationTypeEnabled } from '@/config/notificationPreferences';
+
+const FOLLOWUP_AFTER_DAYS = 3;
+
+async function reminderExists(userId: string, type: string, paymentId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('type', type)
+    .eq('data->>paymentId', paymentId)
+    .maybeSingle();
+  return !!data;
+}
 
 // HU24: si hay un pago pendiente con fecha de corte ya vencida, asegura que exista un
-// recordatorio en el feed de notificaciones (sin duplicar si ya se generó uno antes).
+// recordatorio en el feed de notificaciones (sin duplicar si ya se generó uno antes), y si
+// pasaron 3+ días desde el corte sin pagar, envía un recordatorio adicional de seguimiento.
 async function ensurePaymentReminders(studentId: string, userId: string): Promise<void> {
   try {
     const overdue = await paymentsService.getOverduePendingForStudent(studentId);
     for (const payment of overdue) {
-      const { data: existing } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('type', 'payment_reminder')
-        .eq('data->>paymentId', payment.id)
-        .maybeSingle();
-
-      if (!existing) {
+      if (!(await reminderExists(userId, 'payment_reminder', payment.id))) {
         await notificationsService.create(
           userId,
           'Mensualidad pendiente',
           `La mensualidad de ${payment.studentName} (mes ${payment.month}) está pendiente de pago.`,
           'payment_reminder',
+          { paymentId: payment.id },
+        );
+      }
+
+      const dueDate = payment.dueDate ? new Date(payment.dueDate + 'T00:00:00') : null;
+      const daysOverdue = dueDate ? (Date.now() - dueDate.getTime()) / 86_400_000 : 0;
+      if (daysOverdue >= FOLLOWUP_AFTER_DAYS && !(await reminderExists(userId, 'payment_reminder_followup', payment.id))) {
+        await notificationsService.create(
+          userId,
+          'Mensualidad sigue pendiente',
+          `Ya pasaron ${FOLLOWUP_AFTER_DAYS} días desde la fecha de corte y la mensualidad de ${payment.studentName} (mes ${payment.month}) sigue sin pagarse.`,
+          'payment_reminder_followup',
           { paymentId: payment.id },
         );
       }
@@ -60,12 +79,14 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      const [notifResult, studentsList] = await Promise.all([
+      const [notifResult, studentsList, prefs] = await Promise.all([
         notificationsService.getAll({ limit: 5 }),
         studentsService.getByParent(authUser.id),
+        loadNotificationPreferences(),
       ]);
 
-      setNotifications(notifResult.data);
+      // HU31: solo se muestran los tipos de notificación que el padre eligió recibir en su perfil.
+      setNotifications(notifResult.data.filter((n: any) => isNotificationTypeEnabled(n.type, prefs)));
 
       if (studentsList.length > 0) {
         const student = studentsList[0];

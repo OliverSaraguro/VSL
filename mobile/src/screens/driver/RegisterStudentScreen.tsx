@@ -9,7 +9,9 @@ import {
   Platform,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/config/theme';
@@ -17,7 +19,9 @@ import { Header } from '@/components/common/Header';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import studentsService from '@/servicios/students.service';
+import photosService from '@/servicios/photos.service';
 import { useLocation } from '@/hooks/useLocation';
+import { useAuthStore } from '@/store/auth.store';
 import { Coordinates } from '@/types';
 
 interface RegisterStudentScreenProps {
@@ -50,9 +54,11 @@ const DEFAULT_REGION = {
 };
 
 export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ navigation }) => {
+  const { user } = useAuthStore();
   const [form, setForm] = useState<StudentForm>(INITIAL_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof StudentForm, string>>>({});
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [houseLocation, setHouseLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState('');
   const { getCurrentLocation } = useLocation();
@@ -62,6 +68,8 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
 
   const validate = (): boolean => {
     const e: typeof errors = {};
+    // HU06: la foto es obligatoria para poder identificar al niño en la lista de abordaje.
+    if (!form.photoUrl) e.photoUrl = 'La foto del estudiante es obligatoria';
     if (!form.name.trim()) e.name = 'Nombre obligatorio';
     if (!form.address.trim()) e.address = 'Dirección obligatoria';
     if (!form.parentName.trim()) e.parentName = 'Nombre del representante obligatorio';
@@ -73,6 +81,35 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
     }
     setLocationError('');
     return Object.keys(e).length === 0;
+  };
+
+  const handlePickPhoto = async () => {
+    if (!user) return;
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso necesario', 'Activa el acceso a tus fotos para elegir una imagen.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    setUploadingPhoto(true);
+    try {
+      const asset = result.assets[0];
+      const publicUrl = await photosService.uploadStudentPhoto(user.id, asset.uri, asset.mimeType);
+      update('photoUrl')(publicUrl);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo subir la foto.');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const handleMapPress = (e: any) => {
@@ -138,11 +175,16 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
         >
           {/* Foto */}
           <TouchableOpacity
-            style={styles.photoContainer}
-            onPress={() => Alert.alert('Foto', 'Funcionalidad de selección de foto próximamente.')}
-            accessibilityLabel="Seleccionar foto del estudiante"
+            style={[styles.photoContainer, !!errors.photoUrl && styles.photoContainerError]}
+            onPress={handlePickPhoto}
+            disabled={uploadingPhoto}
+            accessibilityLabel="Seleccionar foto del estudiante (obligatoria)"
           >
-            {form.photoUrl ? (
+            {uploadingPhoto ? (
+              <View style={styles.photoPlaceholder}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : form.photoUrl ? (
               <Image source={{ uri: form.photoUrl }} style={styles.photo} />
             ) : (
               <View style={styles.photoPlaceholder}>
@@ -151,6 +193,12 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
               </View>
             )}
           </TouchableOpacity>
+          {!!errors.photoUrl && (
+            <View style={[styles.errorRow, styles.photoErrorRow]}>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={styles.errorTextMap}>{errors.photoUrl}</Text>
+            </View>
+          )}
 
           {/* Sección estudiante */}
           <View style={styles.sectionHeader}>
@@ -275,6 +323,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     marginTop: spacing.sm,
   },
+  photoContainerError: {
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: colors.error,
+  },
   photo: {
     width: 96,
     height: 96,
@@ -296,6 +349,10 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontWeight: '600',
     marginTop: 4,
+  },
+  photoErrorRow: {
+    justifyContent: 'center',
+    marginTop: -spacing.sm,
   },
   sectionHeader: {
     flexDirection: 'row',

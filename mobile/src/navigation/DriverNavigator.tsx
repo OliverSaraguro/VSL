@@ -5,6 +5,7 @@ import { colors, typography } from '../config/theme';
 import { buildCustomTabBar } from '../components/common/CustomTabBar';
 
 import { DashboardScreen } from '../screens/driver/DashboardScreen';
+import { RoutesListScreen } from '../screens/driver/RoutesListScreen';
 import { StudentsScreen } from '../screens/driver/StudentsScreen';
 import { RegisterStudentScreen } from '../screens/driver/RegisterStudentScreen';
 import { PaymentsScreen } from '../screens/driver/PaymentsScreen';
@@ -12,6 +13,7 @@ import { ProfileScreen } from '../screens/driver/ProfileScreen';
 import { CreateRouteScreen } from '../screens/driver/CreateRouteScreen';
 import { ActiveRouteScreen } from '../screens/driver/ActiveRouteScreen';
 import { RouteDetailScreen } from '../screens/driver/RouteDetailScreen';
+import { MessageHistoryScreen } from '../screens/driver/MessageHistoryScreen';
 
 export type DriverTabParamList = {
   DriverRoutes: undefined;
@@ -46,7 +48,7 @@ function RoutesStackNavigator() {
     >
       <RoutesStack.Screen
         name="RoutesList"
-        component={DashboardScreen}
+        component={RoutesListScreen}
         options={{ headerShown: false }}
       />
       <RoutesStack.Screen
@@ -62,6 +64,11 @@ function RoutesStackNavigator() {
       <RoutesStack.Screen
         name="RouteDetail"
         component={RouteDetailScreen as any}
+        options={{ headerShown: false }}
+      />
+      <RoutesStack.Screen
+        name="MessageHistory"
+        component={MessageHistoryScreen as any}
         options={{ headerShown: false }}
       />
     </RoutesStack.Navigator>

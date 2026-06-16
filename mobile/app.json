@@ -40,7 +40,13 @@
       "expo-location",
       "expo-notifications",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "VSL necesita acceder a tus fotos para elegir la foto del estudiante."
+        }
+      ]
     ]
   }
 }

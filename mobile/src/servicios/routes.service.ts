@@ -108,19 +108,25 @@ function mapTrip(db: any): Trip {
 
 class RoutesService {
   async getAll(params?: Record<string, unknown>): Promise<PaginatedResponse<Route>> {
-    const limit = (params?.limit as number) || 10;
+    const limit = (params?.limit as number) || 50;
     const page = (params?.page as number) || 1;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
+    const userId = getCurrentUserId();
 
-    // Obtener rutas de Supabase con sus respectivas paradas y estudiantes asociados
-    const { data, error, count } = await withTimeout(
-      supabase
-        .from('routes')
-        .select('*, stops(*, student:students(*))', { count: 'exact' })
-        .range(from, to),
-      'cargar rutas',
-    );
+    // Obtener rutas de Supabase con sus respectivas paradas y estudiantes asociados. La RLS de
+    // "routes" permite leer todas las rutas (para que un padre pueda ver la de su conductor),
+    // así que filtramos aquí explícitamente a las del conductor autenticado: "Mis rutas" no debe
+    // mostrar las rutas de otros conductores.
+    let query = supabase
+      .from('routes')
+      .select('*, stops(*, student:students(*))', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (userId) query = query.eq('driver_id', userId);
+
+    const { data, error, count } = await withTimeout(query, 'cargar rutas');
 
     if (error) throw error;
 

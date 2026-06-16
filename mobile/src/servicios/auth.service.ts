@@ -208,6 +208,16 @@ class AuthService {
     } as AuthResponse & { linkWarning?: string };
   }
 
+  // Actualiza la foto de perfil propia (conductor o padre de familia). La RLS de "users" ya
+  // permite a cualquier usuario actualizar su propia fila (auth.uid() = id).
+  async updatePhoto(userId: string, photoUrl: string): Promise<void> {
+    const { error } = await withTimeout(
+      supabase.from('users').update({ photo_url: photoUrl }).eq('id', userId),
+      'actualizar foto de perfil',
+    );
+    if (error) throw new Error(`No se pudo guardar la foto de perfil: ${error.message}`);
+  }
+
   // Cerrar sesión
   async logout(): Promise<void> {
     const { error } = await supabase.auth.signOut();
