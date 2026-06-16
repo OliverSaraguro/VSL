@@ -15,7 +15,7 @@ import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { EmptyState } from '@/components/common/EmptyState';
 import { StudentCard } from '@/components/students/StudentCard';
 import { Button } from '@/components/common/Button';
-import studentsService from '@/services/students.service';
+import studentsService from '@/servicios/students.service';
 import type { Student } from '@/types';
 
 interface StudentsScreenProps {
@@ -34,8 +34,9 @@ export const StudentsScreen: React.FC<StudentsScreenProps> = ({ navigation }) =>
       const data = await studentsService.getAll();
       setStudents(data);
       setFiltered(data);
-    } catch {
-      Alert.alert('Error', 'No se pudo cargar la lista de estudiantes.');
+    } catch (err: any) {
+      console.error('[StudentsScreen] loadStudents', err);
+      Alert.alert('Error', err?.message || 'No se pudo cargar la lista de estudiantes.');
     } finally {
       setLoading(false);
     }

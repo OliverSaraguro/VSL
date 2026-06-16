@@ -5,7 +5,9 @@ import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { useAuthStore } from '@/store/auth.store';
-import apiService from '@/services/api.service';
+import notificationsService from '@/servicios/notifications.service';
+import studentsService from '@/servicios/students.service';
+import { supabase } from '@/config/supabase';
 
 interface ParentDashboardProps {
   navigation: any;
@@ -17,19 +19,45 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [studentName, setStudentName] = useState('tu hijo/a');
+  const [driverName, setDriverName] = useState('—');
   const [routeActive, setRouteActive] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const result = await apiService.get<any>('/notifications');
-      const notifs = result?.notifications ?? result ?? [];
-      setNotifications(Array.isArray(notifs) ? notifs.slice(0, 5) : []);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const [notifResult, studentsList] = await Promise.all([
+        notificationsService.getAll({ limit: 5 }),
+        studentsService.getByParent(authUser.id),
+      ]);
+
+      setNotifications(notifResult.data);
+
+      if (studentsList.length > 0) {
+        const student = studentsList[0];
+        setStudentName(student.name);
+
+        if (student.driverId) {
+          const [driverResult, tripResult] = await Promise.all([
+            supabase.from('users').select('name').eq('id', student.driverId).single(),
+            supabase
+              .from('trips')
+              .select('id, status')
+              .eq('driver_id', student.driverId)
+              .in('status', ['in_progress', 'paused'])
+              .limit(1)
+              .maybeSingle(),
+          ]);
+          if (driverResult.data) setDriverName(driverResult.data.name);
+          setRouteActive(!!tripResult.data);
+        }
+      }
     } catch {
       setNotifications([]);
+    } finally {
+      setLoading(false);
     }
-    setRouteActive(true);
-    setStudentName('Sofía González');
-    setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -68,13 +96,13 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
 
           <View style={styles.etaRow}>
             <View style={styles.etaItem}>
-              <Text style={styles.etaLabel}>Próxima parada</Text>
-              <Text style={styles.etaValue}>Av. Universitaria</Text>
+              <Text style={styles.etaLabel}>Estado</Text>
+              <Text style={styles.etaValue}>{routeActive ? 'En camino' : 'Sin actividad'}</Text>
             </View>
             <View style={styles.etaDivider} />
             <View style={styles.etaItem}>
-              <Text style={styles.etaLabel}>Tiempo estimado</Text>
-              <Text style={styles.etaValueHighlight}>~8 min</Text>
+              <Text style={styles.etaLabel}>Conductor</Text>
+              <Text style={styles.etaValueHighlight}>{driverName}</Text>
             </View>
           </View>
 
@@ -84,20 +112,6 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
             size="md"
             style={styles.trackButton}
           />
-        </Card>
-
-        {/* Conductor */}
-        <Card style={styles.driverCard}>
-          <View style={styles.driverRow}>
-            <View style={styles.driverAvatar}>
-              <Text style={styles.driverAvatarText}>🚌</Text>
-            </View>
-            <View>
-              <Text style={styles.driverLabel}>Conductor</Text>
-              <Text style={styles.driverName}>Oliver Saraguro</Text>
-              <Text style={styles.driverPlate}>LOJ-0456 · Hyundai County</Text>
-            </View>
-          </View>
         </Card>
 
         {/* Notificaciones */}
@@ -124,7 +138,7 @@ export const DashboardScreen: React.FC<ParentDashboardProps> = ({ navigation }) 
           </Card>
           <Card style={styles.actionCard}>
             <Text style={{ fontSize: 28, marginBottom: 8 }}>🚫</Text>
-            <Button title="Ausencia" onPress={() => {}} variant="outline" size="sm" />
+            <Button title="Ausencia" onPress={() => navigation.navigate('ParentAbsence')} variant="outline" size="sm" />
           </Card>
         </View>
       </ScrollView>
@@ -149,15 +163,8 @@ const styles = StyleSheet.create({
   etaDivider: { width: 1, height: 40, backgroundColor: '#E0E0E0' },
   etaLabel: { fontSize: typography.small.fontSize, color: colors.textSecondary },
   etaValue: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text, marginTop: 4 },
-  etaValueHighlight: { fontSize: typography.h3.fontSize, fontWeight: '800', color: colors.primary, marginTop: 4 },
+  etaValueHighlight: { fontSize: typography.body.fontSize, fontWeight: '800', color: colors.primary, marginTop: 4 },
   trackButton: { marginTop: spacing.md },
-  driverCard: { marginBottom: spacing.md },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  driverAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center' },
-  driverAvatarText: { fontSize: 24 },
-  driverLabel: { fontSize: typography.small.fontSize, color: colors.textSecondary },
-  driverName: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },
-  driverPlate: { fontSize: typography.small.fontSize, color: colors.textSecondary, marginTop: 2 },
   sectionTitle: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text, marginTop: spacing.md, marginBottom: spacing.sm },
   notifCard: { marginBottom: spacing.sm, padding: spacing.md },
   notifTitle: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },

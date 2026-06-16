@@ -2,6 +2,26 @@ import { supabase } from '../config/supabase';
 import { Coordinates } from '../types';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
+// Evita que una llamada a Supabase se quede colgada indefinidamente (p.ej. red inestable del emulador
+// o caché de esquema de PostgREST desactualizado tras un alter table)
+function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = 15000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Tiempo de espera agotado en "${label}" (revisa tu conexión a internet)`));
+    }, ms);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 type TrackingEventHandler = (data: any) => void;
 
 interface LocationUpdate {
@@ -92,12 +112,15 @@ class TrackingService {
   // Registrar abordaje en base de datos y transmitir el evento
   async sendBoarding(tripId: string, studentId: string, stopId: string, coords?: Coordinates): Promise<void> {
     // 1. Guardar de forma persistente en la tabla public.boardings
-    const { error } = await supabase.from('boardings').insert({
-      trip_id: tripId,
-      student_id: studentId,
-      latitude: coords?.latitude || 0,
-      longitude: coords?.longitude || 0,
-    });
+    const { error } = await withTimeout(
+      supabase.from('boardings').insert({
+        trip_id: tripId,
+        student_id: studentId,
+        latitude: coords?.latitude || 0,
+        longitude: coords?.longitude || 0,
+      }),
+      'registrar abordaje',
+    );
 
     if (error) {
       console.error('Error al registrar abordaje en DB:', error.message);
@@ -117,11 +140,10 @@ class TrackingService {
   // Registrar llegada/desabordaje y transmitir el evento
   async sendDropoff(tripId: string, studentId: string, stopId: string, coords?: Coordinates): Promise<void> {
     // En el esquema MVP, desabordar significa eliminar la fila de abordaje o marcarla (eliminamos para este ejemplo)
-    const { error } = await supabase
-      .from('boardings')
-      .delete()
-      .eq('trip_id', tripId)
-      .eq('student_id', studentId);
+    const { error } = await withTimeout(
+      supabase.from('boardings').delete().eq('trip_id', tripId).eq('student_id', studentId),
+      'registrar descenso',
+    );
 
     if (error) {
       console.error('Error al registrar descenso en DB:', error.message);

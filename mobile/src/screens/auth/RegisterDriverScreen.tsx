@@ -12,7 +12,7 @@ import { colors, typography, spacing } from '@/config/theme';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { Header } from '@/components/common/Header';
-import { authService } from '@/services/auth.service';
+import { authService } from '@/servicios/auth.service';
 
 interface RegisterDriverScreenProps {
   navigation: any;
@@ -77,8 +77,10 @@ export const RegisterDriverScreen: React.FC<RegisterDriverScreenProps> = ({ navi
       Alert.alert('Registro exitoso', 'Tu cuenta ha sido creada. Inicia sesión.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch {
-      Alert.alert('Error', 'No se pudo completar el registro. Intenta de nuevo.');
+    } catch (err: any) {
+      const msg = err?.message || JSON.stringify(err) || 'Error desconocido';
+      console.error('[RegisterDriver]', msg);
+      Alert.alert('Error de registro', msg);
     } finally {
       setLoading(false);
     }

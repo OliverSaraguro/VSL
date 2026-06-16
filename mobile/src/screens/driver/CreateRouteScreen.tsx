@@ -8,20 +8,21 @@ import {
   Platform,
   StyleSheet,
   Alert,
-  Dimensions,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { colors, typography, spacing } from '@/config/theme';
 import { Header } from '@/components/common/Header';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
-import routesService from '@/services/routes.service';
-import studentsService from '@/services/students.service';
+import routesService from '@/servicios/routes.service';
+import studentsService from '@/servicios/students.service';
+import { useLocation } from '@/hooks/useLocation';
 import { Student, Coordinates } from '@/types';
 
 interface CreateRouteScreenProps {
   navigation: any;
+  route?: { params?: { routeId?: string } };
 }
 
 interface LocalStop {
@@ -32,42 +33,49 @@ interface LocalStop {
   order: number;
   studentId: string;
   studentName: string;
+  isNew: boolean;
 }
 
 const DEFAULT_REGION = {
-  latitude: -3.99,
-  longitude: -79.2,
-  latitudeDelta: 0.03,
-  longitudeDelta: 0.03,
+  latitude: -3.99313,
+  longitude: -79.20456,
+  latitudeDelta: 0.04,
+  longitudeDelta: 0.04,
 };
 
-export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation }) => {
+export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation, route: navRoute }) => {
+  const existingRouteId = navRoute?.params?.routeId;
+  const isEditMode = !!existingRouteId;
+
   const [name, setName] = useState('');
   const [stops, setStops] = useState<LocalStop[]>([]);
-  const [newAddress, setNewAddress] = useState('');
-  
-  // Selección en el mapa
-  const [selectedCoords, setSelectedCoords] = useState<Coordinates | null>(null);
-  
-  // Estudiantes cargados de la base de datos
-  const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-
-  const [loading, setLoading] = useState(false);
-  const [loadingStudents, setLoadingStudents] = useState(true);
   const [nameError, setNameError] = useState('');
 
-  // Cargar estudiantes disponibles desde Supabase
+  // Destino final (ej. el colegio)
+  const [destinationName, setDestinationName] = useState('');
+  const [destinationCoords, setDestinationCoords] = useState<Coordinates | null>(null);
+  const [destinationError, setDestinationError] = useState('');
+
+  // Estudiantes disponibles (cargados desde Supabase, ya con su casa guardada)
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [loadingRoute, setLoadingRoute] = useState(isEditMode);
+
+  const [loading, setLoading] = useState(false);
+
+  const { location: origin, getCurrentLocation } = useLocation();
+
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
   useEffect(() => {
     async function loadStudents() {
       try {
         const list = await studentsService.getAll();
         setStudents(list);
-        if (list.length > 0) {
-          setSelectedStudent(list[0]);
-        }
       } catch (err: any) {
-        Alert.alert('Error', 'No se pudieron cargar los estudiantes de Supabase: ' + err.message);
+        Alert.alert('Error', 'No se pudieron cargar los estudiantes: ' + err.message);
       } finally {
         setLoadingStudents(false);
       }
@@ -75,59 +83,71 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
     loadStudents();
   }, []);
 
+  useEffect(() => {
+    if (!isEditMode) return;
+    async function loadRoute() {
+      try {
+        const existing = await routesService.getById(existingRouteId!);
+        setName(existing.name);
+        if (existing.destinationLatitude && existing.destinationLongitude) {
+          setDestinationCoords({ latitude: existing.destinationLatitude, longitude: existing.destinationLongitude });
+        }
+        setDestinationName(existing.destinationName || '');
+        setStops(
+          existing.stops.map((s) => ({
+            id: s.id,
+            address: s.address,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            order: s.order,
+            studentId: s.studentId || s.students?.[0]?.id || '',
+            studentName: s.students?.[0]?.name || s.name,
+            isNew: false,
+          })),
+        );
+      } catch (err: any) {
+        Alert.alert('Error', 'No se pudo cargar la ruta: ' + err.message);
+      } finally {
+        setLoadingRoute(false);
+      }
+    }
+    loadRoute();
+  }, [isEditMode, existingRouteId]);
+
   const handleMapPress = (e: any) => {
-    const coords = e.nativeEvent.coordinate;
-    setSelectedCoords(coords);
-    // Rellenar dirección temporal con coordenadas mientras se escribe el nombre del punto
-    if (!newAddress.trim()) {
-      setNewAddress(`Parada de ${selectedStudent?.name || 'Estudiante'}`);
+    setDestinationCoords(e.nativeEvent.coordinate);
+    setDestinationError('');
+    if (!destinationName.trim()) {
+      setDestinationName('Colegio / destino final');
     }
   };
 
-  const addStop = () => {
-    if (!newAddress.trim()) {
-      Alert.alert('Falta información', 'Ingresa una descripción o dirección para la parada.');
-      return;
-    }
-    if (!selectedCoords) {
-      Alert.alert('Falta ubicación', 'Toca el mapa para ubicar la parada.');
-      return;
-    }
-    if (!selectedStudent) {
-      Alert.alert('Falta estudiante', 'Debes seleccionar un estudiante para esta parada.');
-      return;
-    }
+  const availableStudents = students.filter((st) => !stops.some((s) => s.studentId === st.id));
 
-    // Validar que el estudiante no esté ya en la ruta
-    if (stops.some(s => s.studentId === selectedStudent.id)) {
-      Alert.alert('Atención', `El estudiante ${selectedStudent.name} ya tiene una parada asignada.`);
+  const addStop = (student: Student) => {
+    if (!student.latitude || !student.longitude) {
+      Alert.alert(
+        'Sin ubicación',
+        `${student.name} no tiene una casa marcada en el mapa. Edita su registro para marcarla.`,
+      );
       return;
     }
-
     const stop: LocalStop = {
-      id: Date.now().toString(),
-      address: newAddress.trim(),
-      latitude: selectedCoords.latitude,
-      longitude: selectedCoords.longitude,
+      id: `local-${Date.now()}`,
+      address: student.address,
+      latitude: student.latitude,
+      longitude: student.longitude,
       order: stops.length + 1,
-      studentId: selectedStudent.id,
-      studentName: selectedStudent.name,
+      studentId: student.id,
+      studentName: student.name,
+      isNew: true,
     };
-
     setStops((prev) => [...prev, stop]);
-    setNewAddress('');
-    setSelectedCoords(null);
-    
-    // Auto-seleccionar el siguiente estudiante libre si existe
-    const nextFree = students.find(st => !stops.some(s => s.studentId === st.id) && st.id !== selectedStudent.id);
-    if (nextFree) {
-      setSelectedStudent(nextFree);
-    }
   };
 
   const removeStop = (id: string) => {
     setStops((prev) =>
-      prev.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i + 1 }))
+      prev.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i + 1 })),
     );
   };
 
@@ -136,77 +156,97 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
       setNameError('El nombre de la ruta es obligatorio');
       return;
     }
-    if (stops.length < 2) {
-      Alert.alert('Atención', 'Agrega al menos 2 paradas para poder crear la ruta.');
+    if (!destinationCoords) {
+      setDestinationError('Toca el mapa para marcar el destino final (ej. el colegio)');
+      return;
+    }
+    if (stops.length === 0) {
+      Alert.alert('Atención', 'Agrega al menos un estudiante a la ruta.');
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Crear la Ruta en Supabase
-      const route = await routesService.create({ name: name.trim() });
-      
-      // 2. Crear cada Parada asociada en Supabase
-      for (const stop of stops) {
-        await routesService.addStop(route.id, {
+      const routeId = isEditMode
+        ? existingRouteId!
+        : (
+            await routesService.create({
+              name: name.trim(),
+              destinationName: destinationName.trim() || 'Destino final',
+              destinationAddress: destinationName.trim(),
+              destinationLatitude: destinationCoords.latitude,
+              destinationLongitude: destinationCoords.longitude,
+            })
+          ).id;
+
+      const newStops = stops.filter((s) => s.isNew);
+      for (const stop of newStops) {
+        await routesService.addStop(routeId, {
           studentId: stop.studentId,
           order: stop.order,
           address: stop.address,
           latitude: stop.latitude,
           longitude: stop.longitude,
-          estimatedTime: `${6 + Math.floor(stop.order * 0.15)}:${((stop.order * 10) % 60).toString().padStart(2, '0')}`, // Estimado secuencial
+          estimatedTime: `${6 + Math.floor(stop.order * 0.15)}:${((stop.order * 10) % 60).toString().padStart(2, '0')}`,
         });
       }
 
-      Alert.alert('Ruta creada', 'La ruta y sus paradas han sido guardadas en Supabase.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert(
+        isEditMode ? 'Ruta actualizada' : 'Ruta creada',
+        isEditMode ? 'Se agregaron los nuevos estudiantes a la ruta.' : 'La ruta y sus paradas han sido guardadas.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
     } catch (err: any) {
-      Alert.alert('Error', 'No se pudo guardar la ruta en Supabase: ' + err.message);
+      Alert.alert('Error', 'No se pudo guardar la ruta: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  const polylineCoords: Coordinates[] = [
+    ...(origin ? [origin] : []),
+    ...stops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
+    ...(destinationCoords ? [destinationCoords] : []),
+  ];
+
+  if (loadingRoute) {
+    return (
+      <View style={styles.container}>
+        <Header title="Cargando ruta..." onBack={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Header title="Crear Ruta interactiva" onBack={() => navigation.goBack()} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <Header title={isEditMode ? 'Agregar estudiantes' : 'Crear Ruta'} onBack={() => navigation.goBack()} />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Nombre de la Ruta */}
           <Input
             label="Nombre de la ruta escolar"
             placeholder="Ej: Ruta Norte - Colegio Loja"
             value={name}
             onChangeText={(v) => { setName(v); setNameError(''); }}
             error={nameError}
+            editable={!isEditMode}
           />
 
-          <Text style={styles.sectionTitle}>1. Selecciona Parada en el Mapa</Text>
-          <Text style={styles.mapHelp}>Toca la pantalla en el mapa para marcar las coordenadas del paradero:</Text>
-          
-          {/* Mapa para seleccionar coordenadas */}
+          <Text style={styles.sectionTitle}>Mapa de la ruta</Text>
+          <Text style={styles.mapHelp}>
+            🔵 Tu ubicación actual · 🟢 Casas de los estudiantes · 🔴 Toca el mapa para marcar el destino final
+          </Text>
           <View style={styles.mapWrapper}>
             <MapView
               style={styles.map}
               provider={PROVIDER_GOOGLE}
-              initialRegion={DEFAULT_REGION}
+              initialRegion={origin ? { ...origin, latitudeDelta: 0.04, longitudeDelta: 0.04 } : DEFAULT_REGION}
               onPress={handleMapPress}
             >
-              {selectedCoords && (
-                <Marker
-                  coordinate={selectedCoords}
-                  title="Nueva Parada"
-                  description="Posición seleccionada"
-                />
-              )}
+              {origin && <Marker coordinate={origin} title="Tu ubicación" pinColor={colors.secondary} />}
               {stops.map((s) => (
                 <Marker
                   key={s.id}
@@ -215,63 +255,44 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
                   pinColor={colors.success}
                 />
               ))}
+              {destinationCoords && (
+                <Marker coordinate={destinationCoords} title={destinationName || 'Destino'} pinColor={colors.error} />
+              )}
+              {polylineCoords.length >= 2 && (
+                <Polyline coordinates={polylineCoords} strokeColor={colors.primary} strokeWidth={4} />
+              )}
             </MapView>
           </View>
 
-          {/* Formulario de Parada */}
-          <View style={styles.addSection}>
-            <Text style={styles.inputLabel}>2. Asignar Estudiante de la Parada</Text>
-            {loadingStudents ? (
-              <Text style={styles.loadingText}>Cargando estudiantes de Supabase...</Text>
-            ) : students.length === 0 ? (
-              <Text style={styles.errorText}>No tienes estudiantes registrados. Agrégalos primero.</Text>
-            ) : (
-              <View style={styles.selectorRow}>
-                {students.map((st) => {
-                  const isAssigned = stops.some(s => s.studentId === st.id);
-                  const isSelected = selectedStudent?.id === st.id;
-                  return (
-                    <TouchableOpacity
-                      key={st.id}
-                      disabled={isAssigned}
-                      style={[
-                        styles.studentChip,
-                        isSelected && styles.studentChipSelected,
-                        isAssigned && styles.studentChipDisabled,
-                      ]}
-                      onPress={() => setSelectedStudent(st)}
-                    >
-                      <Text style={[styles.studentChipText, isSelected && styles.studentChipTextSelected]}>
-                        👦 {st.name} {isAssigned ? '(Asignado)' : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+          <Input
+            label="Nombre del destino final"
+            placeholder="Ej: Colegio Sagrado Corazón"
+            value={destinationName}
+            onChangeText={setDestinationName}
+          />
+          {!!destinationError && <Text style={styles.errorText}>{destinationError}</Text>}
 
-            <Input
-              label="Descripción de la parada / Dirección"
-              placeholder="Ej: Frente al Parque Central"
-              value={newAddress}
-              onChangeText={setNewAddress}
-            />
+          <Text style={styles.sectionTitle}>Agregar estudiantes ({stops.length} en la ruta)</Text>
+          {loadingStudents ? (
+            <Text style={styles.loadingText}>Cargando estudiantes...</Text>
+          ) : availableStudents.length === 0 ? (
+            <Text style={styles.loadingText}>
+              {students.length === 0 ? 'No tienes estudiantes registrados.' : 'Todos tus estudiantes ya están en esta ruta.'}
+            </Text>
+          ) : (
+            <View style={styles.selectorRow}>
+              {availableStudents.map((st) => (
+                <TouchableOpacity key={st.id} style={styles.studentChip} onPress={() => addStop(st)}>
+                  <Text style={styles.studentChipText}>+ 👦 {st.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
-            <Button
-              title={selectedCoords ? "+ Agregar parada en este punto" : "📍 Toca el mapa para ubicar parada"}
-              onPress={addStop}
-              disabled={!selectedCoords || !selectedStudent}
-              variant={selectedCoords ? "outline" : "outline"}
-              size="md"
-              style={styles.addStopBtn}
-            />
-          </View>
-
-          {/* Lista de paradas agregadas */}
-          <Text style={styles.sectionTitle}>Paradas configuradas ({stops.length})</Text>
+          <Text style={styles.sectionTitle}>Orden de paradas</Text>
           {stops.length === 0 ? (
             <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No has agregado paradas en el mapa todavía.</Text>
+              <Text style={styles.emptyText}>Aún no has agregado estudiantes a esta ruta.</Text>
             </Card>
           ) : (
             stops.map((stop) => (
@@ -285,20 +306,20 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
                     <Text style={styles.stopAddress} numberOfLines={2}>{stop.address}</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => removeStop(stop.id)} style={styles.removeBtn}>
-                  <Text style={styles.removeText}>✕</Text>
-                </TouchableOpacity>
+                {stop.isNew && (
+                  <TouchableOpacity onPress={() => removeStop(stop.id)} style={styles.removeBtn}>
+                    <Text style={styles.removeText}>✕</Text>
+                  </TouchableOpacity>
+                )}
               </Card>
             ))
           )}
 
-          {/* Botón de creación final */}
           <Button
-            title="Guardar Ruta y Paradas en Supabase"
+            title={isEditMode ? 'Guardar nuevos estudiantes' : 'Guardar Ruta'}
             onPress={handleCreate}
             loading={loading}
             size="lg"
-            disabled={stops.length < 2}
             style={styles.createButton}
           />
         </ScrollView>
@@ -308,17 +329,9 @@ export const CreateRouteScreen: React.FC<CreateRouteScreenProps> = ({ navigation
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    padding: spacing.lg,
-    paddingBottom: 40,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  scroll: { padding: spacing.lg, paddingBottom: 40 },
   sectionTitle: {
     fontSize: typography.h3.fontSize,
     fontWeight: '700',
@@ -332,29 +345,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   mapWrapper: {
-    height: 220,
+    height: 240,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.md,
   },
-  map: {
-    flex: 1,
-  },
-  addSection: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.lg,
-  },
-  inputLabel: {
-    fontSize: typography.small.fontSize,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+  map: { flex: 1 },
+  errorText: {
+    fontSize: 12,
+    color: colors.error,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
   },
   selectorRow: {
     flexDirection: 'row',
@@ -367,39 +370,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#E8F5E9',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  studentChipSelected: {
-    backgroundColor: colors.primary,
     borderColor: colors.primary,
-  },
-  studentChipDisabled: {
-    opacity: 0.4,
-    backgroundColor: '#E0E0E0',
   },
   studentChipText: {
     fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  studentChipTextSelected: {
-    color: '#FFFFFF',
+    color: colors.primary,
     fontWeight: '700',
   },
   loadingText: {
     fontSize: 13,
     color: colors.textSecondary,
     fontStyle: 'italic',
-  },
-  errorText: {
-    fontSize: 13,
-    color: colors.error,
-    fontWeight: '500',
-  },
-  addStopBtn: {
-    marginTop: spacing.xs,
   },
   stopCard: {
     flexDirection: 'row',
@@ -408,11 +391,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
-  stopHeader: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  stopHeader: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   orderBadge: {
     width: 28,
     height: 28,
@@ -422,24 +401,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
-  orderText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  stopTextContainer: {
-    flex: 1,
-  },
-  stopStudent: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  stopAddress: {
-    fontSize: typography.body.fontSize,
-    color: colors.text,
-    marginTop: 2,
-  },
+  orderText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  stopTextContainer: { flex: 1 },
+  stopStudent: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  stopAddress: { fontSize: typography.body.fontSize, color: colors.text, marginTop: 2 },
   removeBtn: {
     width: 32,
     height: 32,
@@ -448,23 +413,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  removeText: {
-    fontSize: 14,
-    color: colors.error,
-    fontWeight: '700',
-  },
-  emptyCard: {
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  emptyText: {
-    fontSize: typography.body.fontSize,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  createButton: {
-    marginTop: spacing.md,
-  },
+  removeText: { fontSize: 14, color: colors.error, fontWeight: '700' },
+  emptyCard: { padding: spacing.lg, alignItems: 'center', marginBottom: spacing.lg },
+  emptyText: { fontSize: typography.body.fontSize, color: colors.textSecondary, textAlign: 'center' },
+  createButton: { marginTop: spacing.md },
 });
+
 export default CreateRouteScreen;

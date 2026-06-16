@@ -1,5 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { Text } from 'react-native';
 import { colors, typography } from '../config/theme';
 
@@ -7,6 +8,7 @@ import { DashboardScreen } from '../screens/parent/DashboardScreen';
 import { TrackingScreen } from '../screens/parent/TrackingScreen';
 import { HistoryScreen } from '../screens/parent/HistoryScreen';
 import { ProfileScreen } from '../screens/parent/ProfileScreen';
+import { AbsenceScreen } from '../screens/parent/AbsenceScreen';
 
 export type ParentTabParamList = {
   ParentDashboard: undefined;
@@ -16,6 +18,22 @@ export type ParentTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<ParentTabParamList>();
+const DashStack = createStackNavigator();
+
+function DashboardStack() {
+  return (
+    <DashStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.primary },
+        headerTintColor: colors.textInverse,
+        headerTitleStyle: { fontWeight: typography.fontWeight.bold },
+      }}
+    >
+      <DashStack.Screen name="ParentDashboardHome" component={DashboardScreen} options={{ title: 'Inicio' }} />
+      <DashStack.Screen name="ParentAbsence" component={AbsenceScreen} options={{ headerShown: false }} />
+    </DashStack.Navigator>
+  );
+}
 
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   const icons: Record<string, string> = {
@@ -60,8 +78,8 @@ export default function ParentNavigator() {
     >
       <Tab.Screen
         name="ParentDashboard"
-        component={DashboardScreen}
-        options={{ title: 'Inicio', tabBarLabel: 'Inicio' }}
+        component={DashboardStack}
+        options={{ title: 'Inicio', tabBarLabel: 'Inicio', headerShown: false }}
       />
       <Tab.Screen
         name="ParentTracking"

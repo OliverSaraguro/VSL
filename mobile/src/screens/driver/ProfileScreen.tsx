@@ -4,8 +4,6 @@ import {
   Text,
   ScrollView,
   Switch,
-  TouchableOpacity,
-  Image,
   StyleSheet,
   Alert,
 } from 'react-native';
@@ -15,26 +13,45 @@ import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuth } from '@/hooks/useAuth';
-import apiService from '@/services/api.service';
+import { supabase } from '@/config/supabase';
 
 interface ProfileScreenProps {
   navigation: any;
+}
+
+interface DriverMeta {
+  plateNumber: string;
+  vehicleModel: string;
+  vehicleColor: string;
+  licenseNumber: string;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { user } = useAuthStore();
   const { logout } = useAuth();
   const [lowPowerMode, setLowPowerMode] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
+  const [driverMeta, setDriverMeta] = useState<DriverMeta>({
+    plateNumber: '—',
+    vehicleModel: '—',
+    vehicleColor: '—',
+    licenseNumber: '—',
+  });
 
   React.useEffect(() => {
-    const loadProfile = async () => {
+    const loadMeta = async () => {
       try {
-        const data = await apiService.get<any>('/auth/profile');
-        setProfile(data);
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return;
+        const meta = authUser.user_metadata || {};
+        setDriverMeta({
+          plateNumber: meta.licensePlate || '—',
+          vehicleModel: meta.vehicleModel || '—',
+          vehicleColor: meta.vehicleColor || '—',
+          licenseNumber: meta.licenseNumber || '—',
+        });
       } catch {}
     };
-    loadProfile();
+    loadMeta();
   }, []);
 
   const handleLogout = () => {
@@ -62,10 +79,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         {/* Información del vehículo */}
         <Text style={styles.sectionTitle}>Vehículo</Text>
         <Card>
-          <InfoRow label="Placa" value={profile?.driver?.plateNumber ?? '—'} />
-          <InfoRow label="Modelo" value={profile?.driver?.vehicleModel ?? '—'} />
-          <InfoRow label="Color" value={profile?.driver?.vehicleColor ?? '—'} />
-          <InfoRow label="Licencia" value={profile?.driver?.licenseNumber ?? '—'} last />
+          <InfoRow label="Placa" value={driverMeta.plateNumber} />
+          <InfoRow label="Modelo" value={driverMeta.vehicleModel} />
+          <InfoRow label="Color" value={driverMeta.vehicleColor} />
+          <InfoRow label="Licencia" value={driverMeta.licenseNumber} last />
         </Card>
 
         {/* Configuración */}

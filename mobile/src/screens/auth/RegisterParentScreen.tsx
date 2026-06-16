@@ -12,7 +12,7 @@ import { colors, typography, spacing } from '@/config/theme';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { Header } from '@/components/common/Header';
-import { authService } from '@/services/auth.service';
+import { authService } from '@/servicios/auth.service';
 
 interface RegisterParentScreenProps {
   navigation: any;
@@ -68,8 +68,9 @@ export const RegisterParentScreen: React.FC<RegisterParentScreenProps> = ({ navi
       Alert.alert('Registro exitoso', 'Tu cuenta ha sido creada. Inicia sesión.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch {
-      Alert.alert('Error', 'No se pudo completar el registro. Verifica el código de invitación.');
+    } catch (err: any) {
+      console.error('[RegisterParentScreen] handleRegister', err);
+      Alert.alert('Error', err?.message || 'No se pudo completar el registro.');
     } finally {
       setLoading(false);
     }

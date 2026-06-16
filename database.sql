@@ -65,6 +65,10 @@ create table public.routes (
   name text not null,
   is_active boolean default true not null,
   driver_id uuid references public.drivers(id) on delete cascade not null,
+  destination_name text,
+  destination_address text,
+  destination_latitude double precision,
+  destination_longitude double precision,
   created_at timestamptz default now() not null
 );
 
@@ -175,66 +179,11 @@ create table public.messages (
 -- =========================================================================
 -- 3. TRIGGERS Y FUNCIONES DE AUTOMATIZACIÓN
 
--- Sincronización automática de auth.users a public.users, public.drivers y public.parents
-create or replace function public.handle_new_user()
-returns trigger as $$
-declare
-  user_role_val public.user_role;
-begin
-  -- Obtener rol de metadatos de registro
-  user_role_val := (new.raw_user_meta_data->>'role')::public.user_role;
-
-  -- Insertar en la tabla public.users
-  insert into public.users (id, email, name, phone, role, photo_url)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'name', ''),
-    new.raw_user_meta_data->>'phone',
-    user_role_val,
-    new.raw_user_meta_data->>'photoUrl'
-  );
-
-  -- Insertar en la tabla especializada según el rol
-  if user_role_val = 'DRIVER'::public.user_role then
-    insert into public.drivers (
-      id, 
-      license_number, 
-      plate_number, 
-      vehicle_model, 
-      vehicle_color, 
-      license_expiry,
-      vehicle_brand,
-      vehicle_year,
-      vehicle_capacity
-    )
-    values (
-      new.id,
-      coalesce(new.raw_user_meta_data->>'licenseNumber', ''),
-      coalesce(new.raw_user_meta_data->>'licensePlate', ''),
-      coalesce(new.raw_user_meta_data->>'vehicleModel', ''),
-      coalesce(new.raw_user_meta_data->>'vehicleColor', ''),
-      (new.raw_user_meta_data->>'licenseExpiry')::date,
-      new.raw_user_meta_data->>'vehicleBrand',
-      (new.raw_user_meta_data->>'vehicleYear')::integer,
-      (new.raw_user_meta_data->>'vehicleCapacity')::integer
-    );
-  elsif user_role_val = 'PARENT'::public.user_role then
-    insert into public.parents (id, invitation_code)
-    values (
-      new.id,
-      coalesce(new.raw_user_meta_data->>'invitationCode', substring(md5(random()::text) from 1 for 8))
-    );
-  end if;
-
-  return new;
-end;
-$$ language plpgsql security definer;
-
--- Trigger tras inserción en auth.users
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
+-- NOTA: La creación de perfil (public.users / drivers / parents) la hace la app
+-- directamente desde mobile/src/servicios/auth.service.ts justo después del
+-- signUp, en vez de un trigger en auth.users. Esto evita errores silenciosos
+-- de "Database error saving new user" cuando el trigger falla dentro de la
+-- transacción de Supabase Auth. No crear trigger on_auth_user_created aquí.
 
 -- Actualización automática del campo updated_at en public.users
 create or replace function public.handle_updated_at()
@@ -265,11 +214,17 @@ alter table public.absences enable row level security;
 alter table public.payments enable row level security;
 alter table public.notifications enable row level security;
 alter table public.messages enable row level security;
+alter table public.traffic_alerts enable row level security;
+alter table public.driver_substitutions enable row level security;
 
 -- Políticas para users
 create policy "Permitir lectura de perfiles a usuarios autenticados"
   on public.users for select
   using (auth.role() = 'authenticated');
+
+create policy "Permitir creación de perfil propio"
+  on public.users for insert
+  with check (auth.uid() = id);
 
 create policy "Permitir actualización de perfil propio"
   on public.users for update
@@ -277,9 +232,11 @@ create policy "Permitir actualización de perfil propio"
 
 -- Políticas para drivers y parents (Solo lectura para red de usuarios, edición propia)
 create policy "Lectura de conductores" on public.drivers for select using (auth.role() = 'authenticated');
+create policy "Creación de conductor propio" on public.drivers for insert with check (auth.uid() = id);
 create policy "Edición de conductor propio" on public.drivers for update using (auth.uid() = id);
 
 create policy "Lectura de padres" on public.parents for select using (auth.role() = 'authenticated');
+create policy "Creación de padre propio" on public.parents for insert with check (auth.uid() = id);
 create policy "Edición de padre propio" on public.parents for update using (auth.uid() = id);
 
 -- Políticas para students
@@ -335,3 +292,13 @@ create policy "Lectura de mensajes de ruta" on public.messages for select using 
   )
 );
 create policy "Enviar mensajes (conductores)" on public.messages for insert with check (auth.uid() = driver_id);
+
+-- Políticas para traffic_alerts
+create policy "Lectura de alertas de tráfico" on public.traffic_alerts for select using (auth.role() = 'authenticated');
+create policy "Gestión de alertas de tráfico (conductores de la ruta)" on public.traffic_alerts for all using (
+  exists (select 1 from public.routes r where r.id = route_id and r.driver_id = auth.uid())
+);
+
+-- Políticas para driver_substitutions
+create policy "Lectura de sustituciones" on public.driver_substitutions for select using (auth.role() = 'authenticated');
+create policy "Gestión de sustituciones (conductor titular)" on public.driver_substitutions for all using (auth.uid() = titular_driver_id);

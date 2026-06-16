@@ -1,7 +1,7 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { Route, Trip, Student, TripStatus } from '../types';
-import routesService from '../services/routes.service';
-import studentsService from '../services/students.service';
+import routesService from '../servicios/routes.service';
+import studentsService from '../servicios/students.service';
 
 interface RoutesState {
   routes: Route[];
@@ -36,7 +36,8 @@ export const useRoutesStore = create<RoutesState>((set, get) => ({
     try {
       const response = await routesService.getAll();
       set({ routes: response.data, isLoading: false });
-    } catch {
+    } catch (err) {
+      console.error('[routes.store] fetchRoutes', err);
       set({ routes: [], isLoading: false });
     }
   },
@@ -46,7 +47,8 @@ export const useRoutesStore = create<RoutesState>((set, get) => ({
     try {
       const route = await routesService.getTodayRoute();
       set({ todayRoute: route, isLoading: false });
-    } catch {
+    } catch (err) {
+      console.error('[routes.store] fetchTodayRoute', err);
       set({ todayRoute: null, isLoading: false });
     }
   },
@@ -56,7 +58,8 @@ export const useRoutesStore = create<RoutesState>((set, get) => ({
     try {
       const trip = await routesService.getActiveTrip();
       set({ activeTrip: trip, isLoading: false });
-    } catch {
+    } catch (err) {
+      console.error('[routes.store] fetchActiveTrip', err);
       set({ activeTrip: null, isLoading: false });
     }
   },
@@ -66,7 +69,8 @@ export const useRoutesStore = create<RoutesState>((set, get) => ({
     try {
       const students = await studentsService.getByRoute(routeId);
       set({ students, isLoading: false });
-    } catch {
+    } catch (err) {
+      console.error('[routes.store] fetchStudentsByRoute', err);
       set({ students: [], isLoading: false });
     }
   },

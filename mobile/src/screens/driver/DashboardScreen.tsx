@@ -5,7 +5,6 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { colors, typography, spacing } from '@/config/theme';
 import { Button } from '@/components/common/Button';
@@ -16,7 +15,7 @@ import { RouteCard } from '@/components/routes/RouteCard';
 import { StudentCard } from '@/components/students/StudentCard';
 import { useRoutesStore } from '@/store/routes.store';
 import { useAuthStore } from '@/store/auth.store';
-import type { Route, Student } from '@/types';
+import type { Student } from '@/types';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -26,7 +25,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const { user } = useAuthStore();
   const { todayRoute, fetchTodayRoute } = useRoutesStore();
   const [students, setStudents] = useState<Student[]>([]);
-  const [absentCount, setAbsentCount] = useState(0);
+  const [absentCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -132,7 +131,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
             {students.length > 5 && (
               <Button
                 title={`Ver todos (${students.length})`}
-                onPress={() => navigation.navigate('Students')}
+                onPress={() => navigation.navigate('DriverStudents')}
                 variant="outline"
                 size="sm"
                 style={styles.viewAllButton}

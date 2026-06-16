@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
+import { EmptyState } from '@/components/common/EmptyState';
+import { supabase } from '@/config/supabase';
+import studentsService from '@/servicios/students.service';
 
 interface HistoryScreenProps {
   navigation: any;
@@ -15,29 +18,64 @@ interface HistoryEntry {
   status: 'completed' | 'absent';
 }
 
-const MOCK_HISTORY: HistoryEntry[] = [
-  { id: '1', date: '2026-05-25', boardingTime: '06:38', arrivalTime: '07:15', status: 'completed' },
-  { id: '2', date: '2026-05-24', boardingTime: '06:40', arrivalTime: '07:18', status: 'completed' },
-  { id: '3', date: '2026-05-23', boardingTime: '06:35', arrivalTime: '07:12', status: 'completed' },
-  { id: '4', date: '2026-05-22', boardingTime: '-', arrivalTime: '-', status: 'absent' },
-  { id: '5', date: '2026-05-21', boardingTime: '06:42', arrivalTime: '07:20', status: 'completed' },
-  { id: '6', date: '2026-05-20', boardingTime: '06:37', arrivalTime: '07:14', status: 'completed' },
-  { id: '7', date: '2026-05-19', boardingTime: '06:39', arrivalTime: '07:16', status: 'completed' },
-  { id: '8', date: '2026-05-18', boardingTime: '06:41', arrivalTime: '07:19', status: 'completed' },
-  { id: '9', date: '2026-05-17', boardingTime: '-', arrivalTime: '-', status: 'absent' },
-  { id: '10', date: '2026-05-16', boardingTime: '06:36', arrivalTime: '07:13', status: 'completed' },
-];
-
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T12:00:00');
   return date.toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-export const HistoryScreen: React.FC<HistoryScreenProps> = ({ navigation }) => {
-  const [entries] = useState<HistoryEntry[]>(MOCK_HISTORY);
+function formatTime(isoString: string | null | undefined): string {
+  if (!isoString) return '—';
+  return new Date(isoString).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+}
 
-  const completedCount = entries.filter(e => e.status === 'completed').length;
-  const absentCount = entries.filter(e => e.status === 'absent').length;
+export const HistoryScreen: React.FC<HistoryScreenProps> = () => {
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const students = await studentsService.getByParent(user.id);
+        if (students.length === 0) {
+          setLoading(false);
+          return;
+        }
+
+        const studentId = students[0].id;
+
+        const { data: boardings, error } = await supabase
+          .from('boardings')
+          .select('id, boarded_at, student_id, trip:trips(started_at, finished_at, status)')
+          .eq('student_id', studentId)
+          .order('boarded_at', { ascending: false })
+          .limit(90);
+
+        if (error) throw error;
+
+        const mapped: HistoryEntry[] = (boardings || []).map((b: any) => ({
+          id: b.id,
+          date: b.boarded_at ? b.boarded_at.split('T')[0] : '',
+          boardingTime: formatTime(b.boarded_at),
+          arrivalTime: formatTime(b.trip?.finished_at),
+          status: 'completed',
+        }));
+
+        setEntries(mapped);
+      } catch {
+        setEntries([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHistory();
+  }, []);
+
+  const completedCount = entries.filter((e) => e.status === 'completed').length;
+  const absentCount = entries.filter((e) => e.status === 'absent').length;
 
   const renderEntry = ({ item }: { item: HistoryEntry }) => (
     <Card style={styles.entryCard}>
@@ -63,6 +101,14 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ navigation }) => {
     </Card>
   );
 
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Resumen */}
@@ -77,7 +123,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ navigation }) => {
         </Card>
         <Card style={styles.summaryCard}>
           <Text style={[styles.summaryNumber, { color: colors.primary }]}>
-            {Math.round((completedCount / entries.length) * 100)}%
+            {entries.length > 0 ? Math.round((completedCount / entries.length) * 100) : 0}%
           </Text>
           <Text style={styles.summaryLabel}>Asistencia</Text>
         </Card>
@@ -85,19 +131,28 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ navigation }) => {
 
       <Text style={styles.sectionTitle}>Últimos 90 días</Text>
 
-      <FlatList
-        data={entries}
-        renderItem={renderEntry}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+      {entries.length === 0 ? (
+        <EmptyState
+          icon="📋"
+          title="Sin historial"
+          message="No hay registros de viajes para mostrar aún."
+        />
+      ) : (
+        <FlatList
+          data={entries}
+          renderItem={renderEntry}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   summary: { flexDirection: 'row', gap: spacing.sm, padding: spacing.lg, paddingBottom: 0 },
   summaryCard: { flex: 1, alignItems: 'center', paddingVertical: spacing.md },
   summaryNumber: { fontSize: 24, fontWeight: '800', color: colors.success },

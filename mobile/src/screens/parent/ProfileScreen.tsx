@@ -1,22 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Switch, StyleSheet, Alert } from 'react-native';
 import { colors, typography, spacing } from '@/config/theme';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuth } from '@/hooks/useAuth';
+import studentsService from '@/servicios/students.service';
+import { supabase } from '@/config/supabase';
+import type { Student } from '@/types';
 
 interface ProfileScreenProps {
   navigation: any;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   const { user } = useAuthStore();
   const { logout } = useAuth();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [boardingAlerts, setBoardingAlerts] = useState(true);
   const [arrivalAlerts, setArrivalAlerts] = useState(true);
   const [deviationAlerts, setDeviationAlerts] = useState(true);
+  const [myStudents, setMyStudents] = useState<Student[]>([]);
+  const [driverName, setDriverName] = useState('—');
+
+  useEffect(() => {
+    const loadStudents = async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return;
+
+        const list = await studentsService.getByParent(authUser.id);
+        setMyStudents(list);
+
+        if (list.length > 0 && list[0].driverId) {
+          const { data } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', list[0].driverId)
+            .single();
+          if (data) setDriverName(data.name);
+        }
+      } catch {}
+    };
+    loadStudents();
+  }, []);
 
   const handleLogout = () => {
     Alert.alert('Cerrar sesión', '¿Estás seguro de que quieres cerrar sesión?', [
@@ -39,20 +66,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
         </View>
 
-        {/* Información del estudiante */}
-        <Text style={styles.sectionTitle}>Mi hijo/a</Text>
-        <Card>
-          <View style={styles.studentRow}>
-            <View style={styles.studentAvatar}>
-              <Text style={styles.studentInitial}>S</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.studentName}>Sofía González</Text>
-              <Text style={styles.studentDetail}>Ruta Matutina - La Salle</Text>
-              <Text style={styles.studentDetail}>Conductor: Oliver Saraguro</Text>
-            </View>
-          </View>
-        </Card>
+        {/* Estudiantes */}
+        <Text style={styles.sectionTitle}>
+          {myStudents.length === 1 ? 'Mi hijo/a' : 'Mis hijos'}
+        </Text>
+        {myStudents.length === 0 ? (
+          <Card>
+            <Text style={styles.emptyText}>Sin estudiantes vinculados aún.</Text>
+          </Card>
+        ) : (
+          myStudents.map((student) => (
+            <Card key={student.id} style={styles.studentCard}>
+              <View style={styles.studentRow}>
+                <View style={styles.studentAvatar}>
+                  <Text style={styles.studentInitial}>
+                    {student.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.studentName}>{student.name}</Text>
+                  <Text style={styles.studentDetail}>{student.address}</Text>
+                  <Text style={styles.studentDetail}>Conductor: {driverName}</Text>
+                </View>
+              </View>
+            </Card>
+          ))
+        )}
 
         {/* Notificaciones */}
         <Text style={styles.sectionTitle}>Notificaciones</Text>
@@ -99,11 +138,13 @@ const styles = StyleSheet.create({
   userName: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text },
   userEmail: { fontSize: typography.body.fontSize, color: colors.textSecondary, marginTop: 2 },
   sectionTitle: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
+  studentCard: { marginBottom: spacing.sm },
   studentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   studentAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center' },
   studentInitial: { fontSize: 18, fontWeight: '700', color: colors.primary },
   studentName: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },
   studentDetail: { fontSize: typography.small.fontSize, color: colors.textSecondary, marginTop: 2 },
+  emptyText: { fontSize: typography.body.fontSize, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.md },
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md },
   settingBorder: { borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   settingLabel: { fontSize: typography.body.fontSize, color: colors.text },

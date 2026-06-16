@@ -14,7 +14,7 @@ import { Header } from '@/components/common/Header';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Card } from '@/components/common/Card';
-import apiService from '@/services/api.service';
+import paymentsService from '@/servicios/payments.service';
 
 interface PaymentsScreenProps {
   navigation: any;
@@ -23,7 +23,7 @@ interface PaymentsScreenProps {
 interface Payment {
   id: string;
   studentName: string;
-  month: string;
+  month: number;
   amount: number;
   paid: boolean;
 }
@@ -35,25 +35,28 @@ const MONTHS = [
 
 export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) => {
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [allPayments, setAllPayments] = useState<Payment[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadPayments = useCallback(async () => {
     try {
-      const data = await apiService.get<any[]>('/payments');
-      const mapped = data
-        .filter((p: any) => p.month === selectedMonth + 1)
-        .map((p: any) => ({
-          id: p.id,
-          studentName: p.student?.name ?? 'Estudiante',
-          month: MONTHS[p.month - 1],
-          amount: p.amount,
-          paid: p.status === 'PAID',
-        }));
-      setPayments(mapped);
-    } catch {
+      const data = await paymentsService.getAll();
+      const mapped: Payment[] = data.map((p) => ({
+        id: p.id,
+        studentName: p.studentName,
+        month: p.month,
+        amount: p.amount,
+        paid: p.status === 'PAID',
+      }));
+      setAllPayments(mapped);
+      setPayments(mapped.filter((p) => p.month === selectedMonth + 1));
+    } catch (err: any) {
+      console.error('[PaymentsScreen] loadPayments', err);
+      setAllPayments([]);
       setPayments([]);
+      Alert.alert('Error', err?.message || 'No se pudieron cargar los pagos.');
     } finally {
       setLoading(false);
     }
@@ -63,10 +66,26 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
     loadPayments();
   }, [loadPayments]);
 
-  const togglePayment = (paymentId: string) => {
+  useEffect(() => {
+    setPayments(allPayments.filter((p) => p.month === selectedMonth + 1));
+  }, [selectedMonth, allPayments]);
+
+  const togglePayment = async (paymentId: string) => {
+    const payment = payments.find((p) => p.id === paymentId);
+    if (!payment) return;
+    const newPaid = !payment.paid;
     setPayments((prev) =>
-      prev.map((p) => (p.id === paymentId ? { ...p, paid: !p.paid } : p))
+      prev.map((p) => (p.id === paymentId ? { ...p, paid: newPaid } : p))
     );
+    try {
+      await paymentsService.updateStatus(paymentId, newPaid);
+    } catch (err: any) {
+      console.error('[PaymentsScreen] togglePayment', err);
+      setPayments((prev) =>
+        prev.map((p) => (p.id === paymentId ? { ...p, paid: payment.paid } : p))
+      );
+      Alert.alert('Error', err?.message || 'No se pudo actualizar el estado del pago.');
+    }
   };
 
   const onRefresh = async () => {

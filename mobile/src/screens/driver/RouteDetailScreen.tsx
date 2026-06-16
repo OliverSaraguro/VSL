@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { colors, typography, spacing } from '@/config/theme';
 import { Header } from '@/components/common/Header';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
@@ -13,7 +14,7 @@ import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { StudentCard } from '@/components/students/StudentCard';
-import routesService from '@/services/routes.service';
+import routesService from '@/servicios/routes.service';
 import type { Route, Student } from '@/types';
 
 interface RouteDetailScreenProps {
@@ -30,23 +31,30 @@ export const RouteDetailScreen: React.FC<RouteDetailScreenProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await routesService.getById(routeId);
-        setRouteData(data);
-        const routeStudents = (data as any).stops
-          ?.map((stop: any) => stop.student)
-          .filter(Boolean) ?? [];
-        setStudents(routeStudents);
-      } catch {
-        Alert.alert('Error', 'No se pudo cargar el detalle de la ruta.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const load = useCallback(async () => {
+    try {
+      const data = await routesService.getById(routeId);
+      setRouteData(data);
+      const routeStudents = (data as any).stops
+        ?.map((stop: any) => stop.student)
+        .filter(Boolean) ?? [];
+      setStudents(routeStudents);
+    } catch (err: any) {
+      console.error('[RouteDetailScreen] load', err);
+      Alert.alert('Error', err?.message || 'No se pudo cargar el detalle de la ruta.');
+    } finally {
+      setLoading(false);
+    }
   }, [routeId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', load);
+    return unsubscribe;
+  }, [navigation, load]);
 
   if (loading) return <LoadingScreen />;
 
@@ -64,6 +72,14 @@ export const RouteDetailScreen: React.FC<RouteDetailScreenProps> = ({
   const stops = (routeData as any).stops ?? [];
   const firstTime = stops[0]?.estimatedTime ?? '--:--';
   const lastTime = stops[stops.length - 1]?.estimatedTime ?? '--:--';
+
+  const hasDestination = !!(routeData.destinationLatitude && routeData.destinationLongitude);
+  const mapCoords = [
+    ...stops.map((s: any) => ({ latitude: s.latitude, longitude: s.longitude })),
+    ...(hasDestination
+      ? [{ latitude: routeData.destinationLatitude!, longitude: routeData.destinationLongitude! }]
+      : []),
+  ];
 
   return (
     <View style={styles.container}>
@@ -89,6 +105,41 @@ export const RouteDetailScreen: React.FC<RouteDetailScreenProps> = ({
           </View>
         </Card>
 
+        {/* Mapa con la ruta trazada */}
+        {mapCoords.length > 0 && (
+          <View style={styles.mapWrapper}>
+            <MapView
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              initialRegion={{
+                latitude: mapCoords[0].latitude,
+                longitude: mapCoords[0].longitude,
+                latitudeDelta: 0.04,
+                longitudeDelta: 0.04,
+              }}
+            >
+              {stops.map((s: any, i: number) => (
+                <Marker
+                  key={s.id}
+                  coordinate={{ latitude: s.latitude, longitude: s.longitude }}
+                  title={`${i + 1}. ${s.student?.name ?? 'Parada'}`}
+                  pinColor={colors.success}
+                />
+              ))}
+              {hasDestination && (
+                <Marker
+                  coordinate={{ latitude: routeData.destinationLatitude!, longitude: routeData.destinationLongitude! }}
+                  title={routeData.destinationName || 'Destino'}
+                  pinColor={colors.error}
+                />
+              )}
+              {mapCoords.length >= 2 && (
+                <Polyline coordinates={mapCoords} strokeColor={colors.primary} strokeWidth={4} />
+              )}
+            </MapView>
+          </View>
+        )}
+
         {/* Paradas */}
         <Text style={styles.sectionTitle}>Paradas</Text>
         {stops.map((stop: any, index: number) => (
@@ -112,6 +163,12 @@ export const RouteDetailScreen: React.FC<RouteDetailScreenProps> = ({
         {/* Acciones */}
         <View style={styles.actions}>
           <Button
+            title="➕  Agregar estudiantes"
+            onPress={() => navigation.navigate('CreateRoute', { routeId })}
+            variant="outline"
+            size="lg"
+          />
+          <Button
             title="🚌  Iniciar Ruta"
             onPress={() => navigation.navigate('ActiveRoute', { routeId })}
             size="lg"
@@ -126,6 +183,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.lg, paddingBottom: 40 },
   infoCard: { marginBottom: spacing.lg },
+  mapWrapper: {
+    height: 220,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.lg,
+  },
+  map: { flex: 1 },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

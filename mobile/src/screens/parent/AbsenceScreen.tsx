@@ -11,6 +11,8 @@ import { colors, typography, spacing } from '@/config/theme';
 import { Header } from '@/components/common/Header';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
+import studentsService from '@/servicios/students.service';
+import { supabase } from '@/config/supabase';
 
 interface AbsenceScreenProps {
   navigation: any;
@@ -82,12 +84,28 @@ export const AbsenceScreen: React.FC<AbsenceScreenProps> = ({ navigation }) => {
     }
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No autenticado');
+
+      const students = await studentsService.getByParent(user.id);
+      if (students.length === 0) {
+        Alert.alert('Sin estudiantes', 'No tienes estudiantes registrados asociados a tu cuenta.');
+        return;
+      }
+
       const dateStr = selectedDate.toISOString().split('T')[0];
+      await studentsService.reportAbsence({
+        studentId: students[0].id,
+        registeredBy: user.id,
+        date: dateStr,
+        reason: 'Ausencia registrada por padre/madre',
+      });
+
       setRegisteredDates((prev) => [...prev, dateStr]);
       Alert.alert('Ausencia registrada', `Se ha registrado la ausencia para el ${selectedDate.toLocaleDateString('es-EC')}.`);
       setSelectedDate(null);
-    } catch {
-      Alert.alert('Error', 'No se pudo registrar la ausencia.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo registrar la ausencia.');
     } finally {
       setLoading(false);
     }

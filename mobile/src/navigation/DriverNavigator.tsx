@@ -11,6 +11,7 @@ import { PaymentsScreen } from '../screens/driver/PaymentsScreen';
 import { ProfileScreen } from '../screens/driver/ProfileScreen';
 import { CreateRouteScreen } from '../screens/driver/CreateRouteScreen';
 import { ActiveRouteScreen } from '../screens/driver/ActiveRouteScreen';
+import { RouteDetailScreen } from '../screens/driver/RouteDetailScreen';
 
 export type DriverTabParamList = {
   DriverDashboard: undefined;
@@ -34,8 +35,9 @@ function RoutesStack() {
       }}
     >
       <Stack.Screen name="RoutesList" component={DashboardScreen} options={{ title: 'Mis Rutas' }} />
-      <Stack.Screen name="CreateRoute" component={CreateRouteScreen} options={{ title: 'Nueva Ruta' }} />
+      <Stack.Screen name="CreateRoute" component={CreateRouteScreen as any} options={{ title: 'Nueva Ruta' }} />
       <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} options={{ title: 'Ruta Activa', headerShown: false }} />
+      <Stack.Screen name="RouteDetail" component={RouteDetailScreen as any} options={{ title: 'Detalle de Ruta' }} />
     </Stack.Navigator>
   );
 }

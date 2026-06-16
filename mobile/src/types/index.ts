@@ -76,6 +76,10 @@ export interface Route {
   endTime: string;
   isActive: boolean;
   daysOfWeek: number[];
+  destinationName?: string;
+  destinationAddress?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
   createdAt: string;
   updatedAt: string;
 }

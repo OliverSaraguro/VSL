@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserRole } from '../types';
-import authService from '../services/auth.service';
+import authService from '../servicios/auth.service';
 import { supabase } from '../config/supabase';
 
 interface AuthState {
@@ -26,7 +26,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isAuthenticated: false,
       isLoading: false,
-      isHydrated: false,
+      isHydrated: true,
 
       login: async (email, password) => {
         set({ isLoading: true });
@@ -121,39 +121,45 @@ export const useAuthStore = create<AuthState>()(
 );
 
 // Escuchar cambios de autenticación en Supabase en segundo plano
-supabase.auth.onAuthStateChange(async (event, session) => {
-  const store = useAuthStore.getState();
-  
+//
+// IMPORTANTE: supabase-js mantiene un candado interno mientras procesa este callback. Si aquí
+// mismo (de forma síncrona/await directo) se llama a otro método de supabase (p.ej. supabase.from(...)),
+// esa llamada espera el mismo candado y la app queda colgada para siempre en TODAS las consultas
+// futuras (es un deadlock documentado por Supabase). Por eso el trabajo async se difiere con
+// setTimeout(..., 0): así corre después de que el callback termine y libere el candado.
+supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
     if (session?.user) {
-      try {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      setTimeout(async () => {
+        try {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-        if (profile) {
-          useAuthStore.setState({
-            user: {
-              id: profile.id,
-              email: profile.email,
-              name: profile.name,
-              phone: profile.phone,
-              role: profile.role as UserRole,
-              photoUrl: profile.photo_url,
-              isActive: profile.is_active,
-              createdAt: profile.created_at,
-              updatedAt: profile.updated_at,
-            },
-            token: session.access_token,
-            isAuthenticated: true,
-            isLoading: false,
-          });
+          if (profile) {
+            useAuthStore.setState({
+              user: {
+                id: profile.id,
+                email: profile.email,
+                name: profile.name,
+                phone: profile.phone,
+                role: profile.role as UserRole,
+                photoUrl: profile.photo_url,
+                isActive: profile.is_active,
+                createdAt: profile.created_at,
+                updatedAt: profile.updated_at,
+              },
+              token: session.access_token,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          }
+        } catch {
+          // En caso de error, mantener lo que haya o esperar reintentar
         }
-      } catch {
-        // En caso de error, mantener lo que haya o esperar reintentar
-      }
+      }, 0);
     }
   } else if (event === 'SIGNED_OUT') {
     useAuthStore.setState({

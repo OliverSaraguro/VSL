@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,17 @@ import {
   StyleSheet,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { colors, typography, spacing } from '@/config/theme';
 import { Button } from '@/components/common/Button';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Card } from '@/components/common/Card';
+import routesService from '@/servicios/routes.service';
+import trackingService from '@/servicios/tracking.service';
+import { useLocation } from '@/hooks/useLocation';
+import { useAuthStore } from '@/store/auth.store';
+import type { Stop, Trip } from '@/types';
 
 const QUICK_MESSAGES = [
   { label: '📍 Ya estoy afuera', message: 'Ya estoy afuera' },
@@ -19,26 +25,88 @@ const QUICK_MESSAGES = [
   { label: '🏫 Llegamos', message: 'Llegamos al destino' },
 ];
 
-const MOCK_STOPS = [
-  { id: '1', studentName: 'Valentina Sánchez', estimatedTime: '06:30', address: 'Ciudad Victoria' },
-  { id: '2', studentName: 'Sofía González', estimatedTime: '06:38', address: 'Punzara' },
-  { id: '3', studentName: 'Mateo Vera', estimatedTime: '06:45', address: 'Centro' },
-  { id: '4', studentName: 'Isabella Bravo', estimatedTime: '06:52', address: 'El Valle' },
-  { id: '5', studentName: 'Sebastián Cueva', estimatedTime: '06:58', address: 'Zamora Huayco' },
-  { id: '6', studentName: 'Daniel Maldonado', estimatedTime: '07:05', address: 'La Argelia' },
-];
-
 interface ActiveRouteScreenProps {
   navigation: any;
   route: any;
 }
 
-export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation }) => {
-  const [boarding, setBoarding] = useState<Record<string, boolean>>({});
-  const [routeActive, setRouteActive] = useState(true);
+export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation, route: navRoute }) => {
+  const routeId: string | undefined = navRoute?.params?.routeId;
+  const { user } = useAuthStore();
 
-  const handleBoarding = (studentId: string) => {
-    setBoarding((prev) => ({ ...prev, [studentId]: !prev[studentId] }));
+  const [stops, setStops] = useState<Stop[]>([]);
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
+  const [boarding, setBoarding] = useState<Record<string, boolean>>({});
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [finishing, setFinishing] = useState(false);
+
+  const { location, startTracking, stopTracking } = useLocation({ trackingInterval: 5000, distanceFilter: 10 });
+
+  const initRoute = useCallback(async () => {
+    if (!routeId) {
+      setLoadingInit(false);
+      return;
+    }
+    try {
+      const [routeData, existingTrip] = await Promise.all([
+        routesService.getById(routeId),
+        routesService.getActiveTrip(),
+      ]);
+      setStops(routeData.stops || []);
+
+      const trip = existingTrip ?? await routesService.startTrip(routeId);
+      setActiveTrip(trip);
+
+      const boardingMap: Record<string, boolean> = {};
+      (trip.boardings || []).forEach((b) => { boardingMap[b.studentId] = true; });
+      setBoarding(boardingMap);
+
+      trackingService.connect(trip.id, trip.id);
+      startTracking();
+    } catch (err: any) {
+      Alert.alert('Error', 'No se pudo iniciar la ruta: ' + (err?.message || ''));
+    } finally {
+      setLoadingInit(false);
+    }
+  }, [routeId, startTracking]);
+
+  useEffect(() => {
+    initRoute();
+    return () => {
+      stopTracking();
+      trackingService.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!location || !activeTrip || !user) return;
+    trackingService.sendLocation({
+      tripId: activeTrip.id,
+      driverId: user.id,
+      coordinates: location,
+      timestamp: new Date().toISOString(),
+    });
+  }, [location, activeTrip, user]);
+
+  const handleBoarding = async (stop: Stop) => {
+    if (!activeTrip) return;
+    const studentId = stop.studentId ?? stop.students?.[0]?.id;
+    if (!studentId) return;
+
+    const alreadyBoarded = boarding[studentId];
+    setBoarding((prev) => ({ ...prev, [studentId]: !alreadyBoarded }));
+
+    try {
+      if (!alreadyBoarded) {
+        await trackingService.sendBoarding(activeTrip.id, studentId, stop.id, location ?? undefined);
+      } else {
+        await trackingService.sendDropoff(activeTrip.id, studentId, stop.id, location ?? undefined);
+      }
+    } catch (err: any) {
+      console.error('[ActiveRouteScreen] handleBoarding', err);
+      setBoarding((prev) => ({ ...prev, [studentId]: alreadyBoarded }));
+      Alert.alert('Error', err?.message || 'No se pudo registrar el abordaje.');
+    }
   };
 
   const sendQuickMessage = (message: string) => {
@@ -51,15 +119,31 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
       {
         text: 'Finalizar',
         style: 'destructive',
-        onPress: () => {
-          setRouteActive(false);
+        onPress: async () => {
+          if (!activeTrip) { navigation.goBack(); return; }
+          setFinishing(true);
+          try {
+            await routesService.completeTrip(activeTrip.id);
+          } catch {}
+          stopTracking();
+          trackingService.disconnect();
           navigation.goBack();
         },
       },
     ]);
   };
 
+  if (loadingInit) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Iniciando ruta...</Text>
+      </View>
+    );
+  }
+
   const boardedCount = Object.values(boarding).filter(Boolean).length;
+  const totalStudents = stops.length;
 
   return (
     <View style={styles.container}>
@@ -70,15 +154,21 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
           <Text style={styles.headerTitle}>Ruta en curso</Text>
         </View>
         <Text style={styles.counter}>
-          {boardedCount}/{MOCK_STOPS.length}
+          {boardedCount}/{totalStudents}
         </Text>
       </View>
 
-      {/* Map placeholder */}
+      {/* Ubicación actual */}
       <View style={styles.mapContainer}>
         <Text style={styles.mapEmoji}>🗺️</Text>
         <Text style={styles.mapText}>Seguimiento GPS activo</Text>
-        <Text style={styles.mapSubtext}>Loja, Ecuador</Text>
+        {location ? (
+          <Text style={styles.mapSubtext}>
+            {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+          </Text>
+        ) : (
+          <Text style={styles.mapSubtext}>Obteniendo ubicación...</Text>
+        )}
       </View>
 
       {/* Panel inferior */}
@@ -98,29 +188,44 @@ export const ActiveRouteScreen: React.FC<ActiveRouteScreenProps> = ({ navigation
 
         {/* Lista de abordaje */}
         <Text style={styles.sectionTitle}>Abordaje</Text>
-        {MOCK_STOPS.map((stop) => (
-          <Card key={stop.id} style={styles.boardingRow}>
-            <View style={styles.boardingInfo}>
-              <Text style={styles.boardingName}>{stop.studentName}</Text>
-              <Text style={styles.boardingTime}>{stop.estimatedTime} · {stop.address}</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.boardBtn, boarding[stop.id] && styles.boardBtnActive]}
-              onPress={() => handleBoarding(stop.id)}
-            >
-              <Text style={[styles.boardBtnText, boarding[stop.id] && styles.boardBtnTextActive]}>
-                {boarding[stop.id] ? '✓ Abordó' : 'Registrar'}
-              </Text>
-            </TouchableOpacity>
+        {stops.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Esta ruta no tiene paradas configuradas.</Text>
           </Card>
-        ))}
+        ) : (
+          stops.map((stop) => {
+            const studentId = stop.studentId ?? stop.students?.[0]?.id ?? '';
+            const studentName = stop.name || stop.students?.[0]?.name || 'Sin nombre';
+            const boarded = !!boarding[studentId];
+            return (
+              <Card key={stop.id} style={styles.boardingRow}>
+                <View style={styles.boardingInfo}>
+                  <Text style={styles.boardingName}>{studentName}</Text>
+                  <Text style={styles.boardingTime}>
+                    {stop.estimatedTime} · {stop.address}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.boardBtn, boarded && styles.boardBtnActive]}
+                  onPress={() => handleBoarding(stop)}
+                  disabled={!studentId}
+                >
+                  <Text style={[styles.boardBtnText, boarded && styles.boardBtnTextActive]}>
+                    {boarded ? '✓ Abordó' : 'Registrar'}
+                  </Text>
+                </TouchableOpacity>
+              </Card>
+            );
+          })
+        )}
 
         {/* Finalizar */}
         <Button
-          title="Finalizar Ruta"
+          title={finishing ? 'Finalizando...' : 'Finalizar Ruta'}
           onPress={finishRoute}
           variant="danger"
           size="lg"
+          disabled={finishing}
           style={styles.finishButton}
         />
       </ScrollView>
@@ -132,6 +237,8 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  loadingText: { marginTop: spacing.md, fontSize: typography.body.fontSize, color: colors.textSecondary },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -168,6 +275,8 @@ const styles = StyleSheet.create({
   },
   quickMessageText: { fontSize: 12, fontWeight: '600', color: colors.text, textAlign: 'center' },
   sectionTitle: { fontSize: typography.h3.fontSize, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  emptyCard: { padding: spacing.lg, alignItems: 'center' },
+  emptyText: { fontSize: typography.body.fontSize, color: colors.textSecondary, textAlign: 'center' },
   boardingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, marginBottom: spacing.sm },
   boardingInfo: { flex: 1, marginRight: spacing.md },
   boardingName: { fontSize: typography.body.fontSize, fontWeight: '600', color: colors.text },
