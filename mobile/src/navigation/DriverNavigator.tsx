@@ -46,8 +46,6 @@ function RoutesStackNavigator() {
         headerTitleStyle: { fontWeight: typography.fontWeight.bold },
       }}
     >
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
       <RoutesStack.Screen
         name="RoutesList"
         component={RoutesListScreen}
@@ -74,15 +72,6 @@ function RoutesStackNavigator() {
         options={{ headerShown: false }}
       />
     </RoutesStack.Navigator>
-=======
-=======
->>>>>>> Stashed changes
-      <Stack.Screen name="RoutesList" component={RoutesListScreen} options={{ title: 'Mis Rutas' }} />
-      <Stack.Screen name="CreateRoute" component={CreateRouteScreen as any} options={{ title: 'Nueva Ruta' }} />
-      <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} options={{ title: 'Ruta Activa', headerShown: false }} />
-      <Stack.Screen name="RouteDetail" component={RouteDetailScreen as any} options={{ title: 'Detalle de Ruta' }} />
-    </Stack.Navigator>
->>>>>>> Stashed changes
   );
 }
 

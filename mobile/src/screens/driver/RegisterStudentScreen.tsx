@@ -178,14 +178,7 @@ export const RegisterStudentScreen: React.FC<RegisterStudentScreenProps> = ({ na
             style={[styles.photoContainer, !!errors.photoUrl && styles.photoContainerError]}
             onPress={handlePickPhoto}
             disabled={uploadingPhoto}
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
             accessibilityLabel="Seleccionar foto del estudiante (obligatoria)"
-=======
-=======
->>>>>>> Stashed changes
-            accessibilityLabel="Seleccionar foto del estudiante"
->>>>>>> Stashed changes
           >
             {uploadingPhoto ? (
               <View style={styles.photoPlaceholder}>

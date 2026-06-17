@@ -20,7 +20,6 @@ import {
   View,
   RefreshControl,
 } from 'react-native';
-<<<<<<< Updated upstream
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing } from '@/config/theme';
@@ -31,39 +30,10 @@ import type { Student } from '@/types';
 // ─── Constants ──────────────────────────────────────────────────────────────
 const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const MONTHS_FULL = [
-=======
-import { colors, typography, spacing } from '@/config/theme';
-import { Header } from '@/components/common/Header';
-import { LoadingScreen } from '@/components/common/LoadingScreen';
-import { EmptyState } from '@/components/common/EmptyState';
-import { Card } from '@/components/common/Card';
-import { Button } from '@/components/common/Button';
-import { Input } from '@/components/common/Input';
-import paymentsService from '@/servicios/payments.service';
-import studentsService from '@/servicios/students.service';
-import { useAuthStore } from '@/store/auth.store';
-import type { Student } from '@/types';
-
-interface PaymentsScreenProps {
-  navigation: any;
-}
-
-interface Payment {
-  id: string;
-  studentId: string;
-  studentName: string;
-  month: number;
-  amount: number;
-  paid: boolean;
-}
-
-const MONTHS = [
->>>>>>> Stashed changes
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-<<<<<<< Updated upstream
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function pad(n: number) { return String(n).padStart(2, '0'); }
 
@@ -257,46 +227,6 @@ export const PaymentsScreen: React.FC<{ navigation: any }> = () => {
       setPayments(data);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'No se pudieron cargar los pagos.');
-=======
-export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) => {
-  const { user } = useAuthStore();
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [allPayments, setAllPayments] = useState<Payment[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Formulario "Registrar Pago"
-  const [showForm, setShowForm] = useState(false);
-  const [formStudentId, setFormStudentId] = useState<string | null>(null);
-  const [formAmount, setFormAmount] = useState('');
-  const [formPaid, setFormPaid] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const loadPayments = useCallback(async () => {
-    try {
-      const [data, studentList] = await Promise.all([
-        paymentsService.getAll(),
-        studentsService.getAll(),
-      ]);
-      const mapped: Payment[] = data.map((p) => ({
-        id: p.id,
-        studentId: p.studentId,
-        studentName: p.studentName,
-        month: p.month,
-        amount: p.amount,
-        paid: p.status === 'PAID',
-      }));
-      setAllPayments(mapped);
-      setPayments(mapped.filter((p) => p.month === selectedMonth + 1));
-      setStudents(studentList);
-    } catch (err: any) {
-      console.error('[PaymentsScreen] loadPayments', err);
-      setAllPayments([]);
-      setPayments([]);
-      Alert.alert('Error', err?.message || 'No se pudieron cargar los pagos.');
->>>>>>> Stashed changes
     } finally {
       setLoading(false);
     }
@@ -322,54 +252,8 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
     setRefreshing(false);
   };
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
   // ── Calendar ───────────────────────────────────────────────────────────────
   const cells = useMemo(() => getCalendarCells(year, month), [year, month]);
-=======
-=======
->>>>>>> Stashed changes
-  const openForm = () => {
-    setFormStudentId(students[0]?.id ?? null);
-    setFormAmount('');
-    setFormPaid(true);
-    setShowForm(true);
-  };
-
-  const handleSavePayment = async () => {
-    if (!user) return;
-    if (!formStudentId) {
-      Alert.alert('Falta el estudiante', 'Selecciona a qué estudiante corresponde el pago.');
-      return;
-    }
-    const amount = parseFloat(formAmount.replace(',', '.'));
-    if (!amount || amount <= 0) {
-      Alert.alert('Monto inválido', 'Ingresa el valor de la mensualidad.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await paymentsService.upsert({
-        studentId: formStudentId,
-        driverId: user.id,
-        month: selectedMonth + 1,
-        year: new Date().getFullYear(),
-        amount,
-        status: formPaid ? 'PAID' : 'PENDING',
-      });
-      setShowForm(false);
-      await loadPayments();
-      Alert.alert('Listo', `Pago de ${MONTHS[selectedMonth]} registrado correctamente.`);
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'No se pudo registrar el pago.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return <LoadingScreen />;
->>>>>>> Stashed changes
 
   function prevMonth() {
     setDisplay(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
@@ -537,7 +421,6 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
       <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 4 : 0) + spacing.sm }]}>
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>Pagos</Text>
-          {/* Pill llamativo para cambiar el mes */}
           <View style={styles.monthPill}>
             <TouchableOpacity onPress={prevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <MaterialIcons name="chevron-left" size={22} color={colors.primary} />
@@ -551,7 +434,6 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
         </View>
       </View>
 
-<<<<<<< Updated upstream
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
@@ -574,14 +456,12 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
 
         {/* ── Calendar card ── */}
         <View style={styles.calCard}>
-          {/* Weekday headers */}
           <View style={styles.weekRow}>
             {WEEKDAYS.map(d => (
               <Text key={d} style={styles.weekLabel}>{d}</Text>
             ))}
           </View>
 
-          {/* Day cells — render rows of 7 */}
           {Array.from({ length: cells.length / 7 }).map((_, rowIdx) => (
             <View key={rowIdx} style={styles.weekRow}>
               {cells.slice(rowIdx * 7, rowIdx * 7 + 7).map((day, colIdx) => {
@@ -604,172 +484,11 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
             </View>
           ))}
 
-          {/* Day deselect hint */}
           {selectedDay !== null && (
             <TouchableOpacity onPress={() => setSelectedDay(null)} style={styles.clearDayBtn}>
               <MaterialIcons name="close" size={13} color={colors.textSecondary} />
               <Text style={styles.clearDayText}>Ver todo el mes</Text>
             </TouchableOpacity>
-=======
-      <Button
-        title={showForm ? 'Cancelar' : '➕  Registrar Pago'}
-        onPress={() => (showForm ? setShowForm(false) : openForm())}
-        variant={showForm ? 'outline' : 'primary'}
-        size="md"
-        style={styles.registerButton}
-      />
-
-      {showForm && (
-        <Card style={styles.formCard}>
-          <Text style={styles.formLabel}>Estudiante</Text>
-          {students.length === 0 ? (
-            <Text style={styles.formEmpty}>No tienes estudiantes registrados todavía.</Text>
-          ) : (
-            <FlatList
-              horizontal
-              data={students}
-              keyExtractor={(s) => s.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.studentChips}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.studentChip, formStudentId === item.id && styles.studentChipActive]}
-                  onPress={() => setFormStudentId(item.id)}
-                >
-                  <Text style={[styles.studentChipText, formStudentId === item.id && styles.studentChipTextActive]}>
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          )}
-
-          <Text style={styles.formMonthHint}>Mes: {MONTHS[selectedMonth]} {new Date().getFullYear()}</Text>
-
-          <Input
-            label="Monto ($)"
-            placeholder="20.00"
-            value={formAmount}
-            onChangeText={setFormAmount}
-            keyboardType="decimal-pad"
-          />
-
-          <Text style={styles.formLabel}>Estado</Text>
-          <View style={styles.statusToggle}>
-            <TouchableOpacity
-              style={[styles.statusOption, formPaid && styles.statusOptionPaidActive]}
-              onPress={() => setFormPaid(true)}
-            >
-              <Text style={[styles.statusOptionText, formPaid && styles.statusOptionTextActive]}>✓ Cancelado</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.statusOption, !formPaid && styles.statusOptionPendingActive]}
-              onPress={() => setFormPaid(false)}
-            >
-              <Text style={[styles.statusOptionText, !formPaid && styles.statusOptionTextActive]}>Pendiente</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Button title="Guardar pago" onPress={handleSavePayment} loading={saving} size="lg" style={styles.saveButton} />
-        </Card>
-      )}
-
-      <Button
-        title={showForm ? 'Cancelar' : '➕  Registrar Pago'}
-        onPress={() => (showForm ? setShowForm(false) : openForm())}
-        variant={showForm ? 'outline' : 'primary'}
-        size="md"
-        style={styles.registerButton}
-      />
-
-      {showForm && (
-        <Card style={styles.formCard}>
-          <Text style={styles.formLabel}>Estudiante</Text>
-          {students.length === 0 ? (
-            <Text style={styles.formEmpty}>No tienes estudiantes registrados todavía.</Text>
-          ) : (
-            <FlatList
-              horizontal
-              data={students}
-              keyExtractor={(s) => s.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.studentChips}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.studentChip, formStudentId === item.id && styles.studentChipActive]}
-                  onPress={() => setFormStudentId(item.id)}
-                >
-                  <Text style={[styles.studentChipText, formStudentId === item.id && styles.studentChipTextActive]}>
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          )}
-
-          <Text style={styles.formMonthHint}>Mes: {MONTHS[selectedMonth]} {new Date().getFullYear()}</Text>
-
-          <Input
-            label="Monto ($)"
-            placeholder="20.00"
-            value={formAmount}
-            onChangeText={setFormAmount}
-            keyboardType="decimal-pad"
-          />
-
-          <Text style={styles.formLabel}>Estado</Text>
-          <View style={styles.statusToggle}>
-            <TouchableOpacity
-              style={[styles.statusOption, formPaid && styles.statusOptionPaidActive]}
-              onPress={() => setFormPaid(true)}
-            >
-              <Text style={[styles.statusOptionText, formPaid && styles.statusOptionTextActive]}>✓ Cancelado</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.statusOption, !formPaid && styles.statusOptionPendingActive]}
-              onPress={() => setFormPaid(false)}
-            >
-              <Text style={[styles.statusOptionText, !formPaid && styles.statusOptionTextActive]}>Pendiente</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Button title="Guardar pago" onPress={handleSavePayment} loading={saving} size="lg" style={styles.saveButton} />
-        </Card>
-      )}
-
-      {/* Lista de pagos */}
-      {payments.length === 0 ? (
-        <EmptyState
-          icon="💰"
-          title="Sin registros"
-          message={`No hay pagos registrados para ${MONTHS[selectedMonth]}. Usa "Registrar Pago" para llevar el control.`}
-        />
-      ) : (
-        <FlatList
-          data={payments}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.paymentList}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-          renderItem={({ item }) => (
-            <Card style={styles.paymentCard}>
-              <View style={styles.paymentInfo}>
-                <Text style={styles.paymentName}>{item.studentName}</Text>
-                <Text style={styles.paymentAmount}>${item.amount.toFixed(2)}</Text>
-              </View>
-              <View style={styles.paymentToggle}>
-                <Text style={[styles.paymentStatus, item.paid ? styles.paid : styles.pending]}>
-                  {item.paid ? 'Pagado' : 'Pendiente'}
-                </Text>
-                <Switch
-                  value={item.paid}
-                  onValueChange={() => togglePayment(item.id)}
-                  trackColor={{ false: '#E0E0E0', true: '#A5D6A7' }}
-                  thumbColor={item.paid ? colors.success : '#FAFAFA'}
-                />
-              </View>
-            </Card>
->>>>>>> Stashed changes
           )}
         </View>
 
@@ -835,10 +554,8 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
             { paddingBottom: insets.bottom + 8, transform: [{ translateY: slideTranslate }] },
           ]}
         >
-          {/* Sheet handle */}
           <View style={styles.handle} />
 
-          {/* Modal header */}
           <View style={styles.sheetHeader}>
             {modalStep === 'form' && editingPayment === null && (
               <TouchableOpacity onPress={() => setModalStep('student')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -858,7 +575,6 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
           </View>
 
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            {/* ── Step 1: Student selector ── */}
             {modalStep === 'student' && (
               <>
                 <View style={styles.searchWrap}>
@@ -892,10 +608,8 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
               </>
             )}
 
-            {/* ── Step 2: Payment form ── */}
             {modalStep === 'form' && (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {/* Student chip */}
                 {modalStudent && (
                   <View style={styles.selectedStudent}>
                     <View style={styles.studentAvatar}>
@@ -910,7 +624,6 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
                   </View>
                 )}
 
-                {/* Date row */}
                 <Text style={styles.fieldLabel}>Fecha de pago</Text>
                 <View style={styles.dateRow}>
                   <TouchableOpacity style={styles.dateBtn} onPress={() => adjustDate(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -931,7 +644,6 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
                   </TouchableOpacity>
                 </View>
 
-                {/* Amount */}
                 <Text style={styles.fieldLabel}>Monto ($)</Text>
                 <View style={styles.amountWrap}>
                   <Text style={styles.currencySign}>$</Text>
@@ -945,7 +657,6 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
                   />
                 </View>
 
-                {/* Notes */}
                 <Text style={styles.fieldLabel}>Notas (opcional)</Text>
                 <TextInput
                   style={styles.notesInput}
@@ -976,132 +687,12 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ navigation }) =>
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
 
-  // Header
   header: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
     backgroundColor: colors.primary,
   },
-<<<<<<< Updated upstream
   headerRow: {
-=======
-  monthText: {
-    fontSize: typography.small.fontSize,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  monthTextActive: {
-    color: '#FFFFFF',
-  },
-  summary: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  summaryCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  summaryLabel: {
-    fontSize: typography.small.fontSize,
-    color: colors.textSecondary,
-  },
-  summaryValue: {
-    fontSize: typography.h2.fontSize,
-    fontWeight: '800',
-    color: colors.success,
-    marginTop: 4,
-  },
-  registerButton: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  formCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  formLabel: {
-    fontSize: typography.small.fontSize,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  formEmpty: {
-    fontSize: typography.body.fontSize,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  formMonthHint: {
-    fontSize: typography.small.fontSize,
-    color: colors.primary,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-  studentChips: {
-    gap: 8,
-    paddingBottom: spacing.sm,
-  },
-  studentChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  studentChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  studentChipText: {
-    fontSize: typography.small.fontSize,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  studentChipTextActive: {
-    color: '#FFFFFF',
-  },
-  statusToggle: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  statusOption: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  statusOptionPaidActive: {
-    backgroundColor: '#E8F5E9',
-    borderColor: colors.success,
-  },
-  statusOptionPendingActive: {
-    backgroundColor: '#FFF8E1',
-    borderColor: '#F57F17',
-  },
-  statusOptionText: {
-    fontSize: typography.small.fontSize,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  statusOptionTextActive: {
-    color: colors.text,
-  },
-  saveButton: {
-    marginTop: spacing.xs,
-  },
-  paymentList: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 24,
-  },
-  paymentCard: {
->>>>>>> Stashed changes
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1131,14 +722,11 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
 
-  // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
 
-  // Summary
   summaryRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
 
-  // Calendar
   calCard: {
     backgroundColor: colors.surface,
     borderRadius: 18,
@@ -1158,7 +746,6 @@ const styles = StyleSheet.create({
   },
   clearDayText: { fontSize: 11, color: colors.textSecondary },
 
-  // Filter
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
   chip: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
@@ -1170,10 +757,8 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#FFF' },
   countLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
 
-  // Section title
   sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
 
-  // List
   list: { gap: spacing.sm },
   loadingPlaceholder: { gap: spacing.sm },
   skeleton: { height: 70, borderRadius: 14, backgroundColor: '#E2E8F0' },
@@ -1181,7 +766,6 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.textSecondary },
   emptyMsg: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
 
-  // FAB
   fab: {
     position: 'absolute',
     right: spacing.lg,
@@ -1195,12 +779,10 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
 
-  // Modal overlay
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  // Bottom sheet
   sheet: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
@@ -1227,7 +809,6 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 17, fontWeight: '700', color: colors.text, flex: 1, textAlign: 'center' },
 
-  // Student search
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: colors.background,
@@ -1248,7 +829,6 @@ const styles = StyleSheet.create({
   studentName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
   noStudents: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 24, fontSize: 13 },
 
-  // Form
   selectedStudent: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12,
